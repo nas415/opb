@@ -1,0 +1,20 @@
+{
+  "name": "onepiecebot",
+  "version": "1.0.0",
+  "description": "One Piece Discord Bot",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node deploy-commands.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^14.24.0",
+    "dotenv": "^16.4.5",
+    "mongodb": "^6.20.0",
+    "mongoose": "^8.19.2"
+  }
+}
