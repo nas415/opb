@@ -104,10 +104,9 @@ export async function execute(interactionOrMessage, client) {
 
   const embed = buildCardEmbed(card, ownedEntry, user);
 
-  // if not owned, make it grey and show NOT OWNED prominently
+  // if not owned, make it grey but keep full info visible
   if (!ownedEntry || (ownedEntry.count || 0) <= 0) {
     embed.setColor(0x2f3136);
-    embed.setDescription("**NOT OWNED**");
   }
 
   // build evolution chain (root then recursive evolutions)

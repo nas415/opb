@@ -31,24 +31,93 @@ export async function execute(interaction, client) {
     if (interaction.isButton()) {
       const id = interaction.customId || "";
       // only handle known prefixes
-      if (!id.startsWith("info_") && !id.startsWith("collection_") && !id.startsWith("quest_")) return;
+      if (!id.startsWith("info_") && !id.startsWith("collection_") && !id.startsWith("quest_") && !id.startsWith("help_")) return;
 
       const parts = id.split(":");
       if (parts.length < 2) return;
       const action = parts[0];
       const ownerId = parts[1];
 
-      // only allow the user who requested to use these buttons
-      if (interaction.user.id !== ownerId) {
-        await interaction.reply({ content: "Only the original requester can use these buttons.", ephemeral: true });
+      // HELP category buttons: help_cat:<category>:<userId>
+      if (id.startsWith("help_cat")) {
+        const parts = id.split(":");
+        const category = parts[1];
+        const userId = parts[2];
+        if (interaction.user.id !== userId) {
+          await interaction.reply({ content: "Only the original requester can use these buttons.", ephemeral: true });
+          return;
+        }
+
+        try {
+          // Static help groups (match commands provided by owner)
+          const groups = {
+            COMBAT: [
+              { name: "team", desc: "view your team" },
+              { name: "team add", desc: "add a card to your team" },
+              { name: "team remove", desc: "remove a card from your team" },
+              { name: "autoteam", desc: "builds the best possible team (powerwise)" },
+              { name: "upgrade", desc: "upgrade a card to its next rank" }
+            ],
+            ECONOMY: [
+              { name: "balance", desc: "shows your balance and reset token count" },
+              { name: "daily", desc: "claim daily rewards" },
+              { name: "gamble", desc: "gamble an amount of beli" },
+              { name: "mission", desc: "one piece trivia questions that give you rewards" },
+              { name: "quests", desc: "view your daily and weekly quests" },
+              { name: "sell", desc: "sell a card or item for beli" }
+            ],
+            COLLECTION: [
+              { name: "info", desc: "view info about a card or item" },
+              { name: "pull", desc: "pull a random card" },
+              { name: "resetpulls", desc: "resets your card pull count" }
+            ],
+            GENERAL: [
+              { name: "help", desc: "shows all bot commands" },
+              { name: "inventory", desc: "view your inventory items" },
+              { name: "user", desc: "shows your user profile" }
+            ]
+          };
+
+          if (!groups[category]) {
+            await interaction.reply({ content: "Category not found.", ephemeral: true });
+            return;
+          }
+
+          const lines = groups[category].map(c => `**${c.name}** — ${c.desc}`).join("\n") || "No commands";
+          const embed = new EmbedBuilder()
+            .setTitle(`${category} Commands`)
+            .setColor(0xFFFFFF)
+            .setDescription(lines)
+            .setFooter({ text: `Requested by ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL() });
+
+          // build buttons for all categories, mark selected as primary
+          const order = ["COMBAT", "ECONOMY", "COLLECTION", "GENERAL"];
+          const allButtons = order.map(cat => new ButtonBuilder()
+            .setCustomId(`help_cat:${cat}:${userId}`)
+            .setLabel(cat)
+            .setStyle(cat === category ? ButtonStyle.Primary : ButtonStyle.Secondary)
+          );
+
+          const rows = [];
+          for (let i = 0; i < allButtons.length; i += 5) {
+            rows.push(new ActionRowBuilder().addComponents(...allButtons.slice(i, i + 5)));
+          }
+
+          await interaction.update({ embeds: [embed], components: rows });
+        } catch (e) {
+          console.error(e);
+          await interaction.reply({ content: "Error updating help view.", ephemeral: true });
+        }
         return;
       }
 
       // INFO: support info_goto:<userId>:<rootCardId>:<index> and info_prev/info_next:<userId>:<cardId>
         // Handle quest view/claim buttons
+
       if (action === "quest_view") {
-        const questType = parts[2]; // daily or weekly
-        const userId = parts[3];
+        // customId format from command: quest_view:<type>:<userId>
+        const questType = parts[1]; // daily or weekly
+        const userId = parts[2];
 
         if (interaction.user.id !== userId) {
           await interaction.reply({ content: "Only the original requester can use these buttons.", ephemeral: true });
@@ -150,15 +219,34 @@ export async function execute(interaction, client) {
           return;
         }
 
-        // Update user's balance and inventory
+        // Update user's balance, XP and inventory
         let bal = await Balance.findOne({ userId });
-        if (!bal) bal = new Balance({ userId, amount: 500 });
-        
+        if (!bal) bal = new Balance({ userId, amount: 500, xp: 0, level: 0 });
+
         bal.amount += totalMoney;
         bal.resetTokens = (bal.resetTokens || 0) + totalResetTokens;
+        // Award XP for claiming quests (small amount per claimed quest)
+        const XP_PER_QUEST = 5;
+        bal.xp = (bal.xp || 0) + (claimed * XP_PER_QUEST);
+        while ((bal.xp || 0) >= 100) {
+          bal.xp -= 100;
+          bal.level = (bal.level || 0) + 1;
+        }
         await bal.save();
 
-        // TODO: Add chests to inventory when chest system is implemented
+        // Add quest chests to user's inventory
+        if (totalChests.length > 0) {
+          const Inventory = (await import("../models/Inventory.js")).default;
+          let inv = await Inventory.findOne({ userId });
+          if (!inv) inv = new Inventory({ userId, items: {}, chests: { C:0, B:0, A:0, S:0 }, xpBottles: 0 });
+          inv.chests = inv.chests || { C:0, B:0, A:0, S:0 };
+          for (const c of totalChests) {
+            const rank = String(c.rank || "C").toUpperCase();
+            const count = parseInt(c.count || 0, 10) || 0;
+            inv.chests[rank] = (inv.chests[rank] || 0) + count;
+          }
+          await inv.save();
+        }
 
         const rewardEmbed = new EmbedBuilder()
           .setTitle("Quests Claimed!")
@@ -222,7 +310,6 @@ export async function execute(interaction, client) {
           const newEmbed = buildCardEmbed(newCard, ownedEntry, interaction.user);
           if (!ownedEntry || (ownedEntry.count || 0) <= 0) {
             newEmbed.setColor(0x2f3136);
-            newEmbed.setDescription("**NOT OWNED**");
           }
 
           // compute prev/next indices for this chain and attach buttons

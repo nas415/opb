@@ -25,7 +25,7 @@ export async function execute(interactionOrMessage, client) {
     .setColor(0xFFFFFF)
     .addFields(
       { name: "Balance", value: `${emoji}${CURRENCY_SYMBOL} ${bal.amount}`, inline: true },
-      { name: "Reset Tokens", value: `${bal.resetTokens || 5}`, inline: true }
+      { name: "Reset Tokens", value: `${bal.resetTokens || 0}`, inline: true }
     )
     .setThumbnail(user.displayAvatarURL())
     .setFooter({ text: "Currency: earned via quests, gambling, selling cards (TODO)" });

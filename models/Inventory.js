@@ -7,6 +7,7 @@ const InventorySchema = new mongoose.Schema({
     C: { type: Number, default: 0 },
     B: { type: Number, default: 0 },
     A: { type: Number, default: 0 }
+    ,S: { type: Number, default: 0 }
   },
   xpBottles: { type: Number, default: 0 }
 });

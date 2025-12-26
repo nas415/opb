@@ -22,10 +22,12 @@ export async function buildQuestEmbed(questDoc, user) {
 
   let description = `Resets in: ${hours}h ${minutes}m\n\n`;
 
+  // Only show quests that are not claimed for this user
   questDoc.quests.forEach((quest, index) => {
     const progress = userProgress.get(quest.id) || { current: 0, claimed: false };
-    const status = progress.claimed ? "✅" :
-                  progress.current >= quest.target ? "🎁" : "🔄";
+    if (progress.claimed) return; // don't show claimed quests so UI stays clean per-user
+
+    const status = progress.current >= quest.target ? "🎁" : "🔄";
     
     // Format rewards
     const rewards = [];
@@ -43,6 +45,10 @@ export async function buildQuestEmbed(questDoc, user) {
     description += `Progress: ${progress.current}/${quest.target}\n`;
     description += `Rewards: ${rewards.join(", ")}\n\n`;
   });
+
+  if (description.trim().endsWith("Quests") || description.trim() === `Resets in: ${hours}h ${minutes}m`) {
+    description += `(No active quests for you right now)`;
+  }
 
   embed.setDescription(description);
   return embed;

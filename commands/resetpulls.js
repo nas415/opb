@@ -14,7 +14,7 @@ export async function execute(interactionOrMessage, client) {
   // ensure balance exists
   let bal = await Balance.findOne({ userId });
   if (!bal) {
-    bal = new Balance({ userId, amount: 500, resetTokens: 5 });
+    bal = new Balance({ userId, amount: 500, resetTokens: 0 });
     await bal.save();
   }
 

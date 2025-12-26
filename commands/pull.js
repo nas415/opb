@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
 import { getRandomCardByProbability, getRankInfo } from "../cards.js";
 import Pull from "../models/Pull.js";
+import Balance from "../models/Balance.js";
 import Progress from "../models/Progress.js";
 const WINDOW_MS = 8 * 60 * 60 * 1000; // 8 hours
 const MAX_PULLS = 7;
@@ -59,17 +60,30 @@ export async function execute(interactionOrMessage, client) {
     return;
   }
 
-  // consume one pull (respecting existing window)
+  // consume one pull (respecting existing window) and increment total pulls for pity
   if (pullDoc.window !== currentWindow) {
     pullDoc.window = currentWindow;
     pullDoc.used = 1;
+    pullDoc.totalPulls = (pullDoc.totalPulls || 0) + 1;
   } else {
     pullDoc.used += 1;
+    pullDoc.totalPulls = (pullDoc.totalPulls || 0) + 1;
   }
   await pullDoc.save();
 
-  // perform pull (probability-driven)
-  const pulled = getRandomCardByProbability(PULL_PROBABILITIES);
+  // perform pull (probability-driven) with 100-pull pity and level sampling
+  // determine current position in 100-pull pity cycle (1..100)
+  const total = pullDoc.totalPulls || 0;
+  const cyclePos = (total % 100) === 0 ? 100 : (total % 100);
+
+  // guarantee S card on every 100th pull
+  let pulled = null;
+  if (cyclePos === 100) {
+    const { cards } = await import("../cards.js");
+    const sPool = cards.filter((c) => !c.isUpgrade && c.rank && String(c.rank).toUpperCase() === "S");
+    if (sPool.length > 0) pulled = sPool[Math.floor(Math.random() * sPool.length)];
+  }
+  if (!pulled) pulled = getRandomCardByProbability(PULL_PROBABILITIES);
 
   // ensure user's progress document
   let progDoc = await Progress.findOne({ userId });
@@ -87,17 +101,42 @@ export async function execute(interactionOrMessage, client) {
   }
 
   let description = "";
-  let footer = `Pull ${pullDoc.used}/${MAX_PULLS} • ${pulled.type === "Attack" ? "Attacking Card" : (pulled.type || "-")}`;
+  // footer will show pity cycle progress instead of per-window pulls
+  const footer = `Pity: ${cyclePos}/100`;
 
   // check duplicate -> convert to XP
   // read existing entry from Map
   const existing = userCardsMap.get(pulled.id);
+
+  // sample a level between 1 and cyclePos (rarer for higher levels)
+  function sampleLevel(maxLevel) {
+    const lambda = 0.1; // controls rarity curve; ~5% chance to be >30 at max
+    // weights for levels 1..maxLevel
+    const weights = new Array(maxLevel);
+    let sum = 0;
+    for (let k = 1; k <= maxLevel; k++) {
+      const w = Math.exp(-lambda * (k - 1));
+      weights[k - 1] = w;
+      sum += w;
+    }
+    const r = Math.random() * sum;
+    let acc = 0;
+    for (let i = 0; i < weights.length; i++) {
+      acc += weights[i];
+      if (r <= acc) return i + 1;
+    }
+    return maxLevel;
+  }
+
+  const pulledLevel = sampleLevel(cyclePos);
+
   if (existing && existing.count > 0) {
     const xpGain = RANK_XP[pulled.rank.toUpperCase()] || 0;
     existing.xp = (existing.xp || 0) + xpGain;
-    description = `You pulled **${pulled.name}** again — converted to **${xpGain} XP**.`;
+    description = `Converted to **${xpGain} XP**.`;
 
-    // level up
+    // Do NOT overwrite existing.level with the pulled duplicate's sampled level.
+    // Only level up via accumulated XP.
     let leveled = false;
     while ((existing.xp || 0) >= 100) {
       existing.xp -= 100;
@@ -107,9 +146,10 @@ export async function execute(interactionOrMessage, client) {
     if (leveled) description += ` Your card leveled up to level ${existing.level}!`;
     userCardsMap.set(pulled.id, existing);
   } else {
-    const newEntry = { count: 1, xp: 0, level: 0, acquiredAt: Date.now() };
+    const newEntry = { count: 1, xp: 0, level: Math.min(100, pulledLevel), acquiredAt: Date.now() };
     userCardsMap.set(pulled.id, newEntry);
-    description = `You pulled **${pulled.name}** — added to your collection!`;
+    // move the "added to your collection" text to the title later when building the embed
+    description = ``;
   }
 
   // write back to progress doc (store as plain object to avoid Map persistence quirks)
@@ -123,10 +163,34 @@ export async function execute(interactionOrMessage, client) {
     Quest.getCurrentQuests("weekly")
   ]);
 
+  // Ensure quests are generated before recording (if command hasn't been used yet)
+  if (!dailyQuests.quests.length) {
+    const { generateQuests } = await import("../lib/quests.js");
+    dailyQuests.quests = generateQuests("daily");
+    await dailyQuests.save();
+  }
+  if (!weeklyQuests.quests.length) {
+    const { generateQuests } = await import("../lib/quests.js");
+    weeklyQuests.quests = generateQuests("weekly");
+    await weeklyQuests.save();
+  }
+
   await Promise.all([
     dailyQuests.recordAction(userId, "pull", 1),
     weeklyQuests.recordAction(userId, "pull", 1)
   ]);
+
+  // award 1xp to user for pulling
+  try {
+    let balDoc = await Balance.findOne({ userId });
+    if (!balDoc) { balDoc = new Balance({ userId, amount: 500, xp: 0, level: 0 }); }
+    balDoc.xp = (balDoc.xp || 0) + 1;
+    while ((balDoc.xp || 0) >= 100) {
+      balDoc.xp -= 100;
+      balDoc.level = (balDoc.level || 0) + 1;
+    }
+    await balDoc.save();
+  } catch (e) { /* non-fatal */ }
 
   // Show base stats (level 1) for card pull embed
   const effectivePower = pulled.power;
@@ -137,17 +201,29 @@ export async function execute(interactionOrMessage, client) {
   // build embed similar to the provided image layout
   const rankInfo = getRankInfo(pulled.rank);
 
-  // build compact 2x2 embed layout without level display
-  const statsText = `**Power:** ${effectivePower}
+  // build compact 2x2 embed layout and include pulled level
+  const displayEntry = userCardsMap.get(pulled.id) || {};
+  const displayLevel = displayEntry.level || 0;
+  const statsText = `**Level:** ${displayLevel}
+**Power:** ${effectivePower}
 **Attack:** ${effectiveAttackMin} - ${effectiveAttackMax}
 **Health:** ${effectiveHealth}
 **Effect:** ${pulled.ability ? pulled.ability : "None"}`;
 
+  // if this was a new acquisition, show the card's `title` as normal text in the description
+  const isNew = description === "" && (userCardsMap.get(pulled.id) || {}).acquiredAt;
+  const entryForTitle = userCardsMap.get(pulled.id) || {};
+  const subtitle = isNew && pulled.title ? `${pulled.title}` : "";
+  // include card type (Attacking/Support) in footer next to pity
+  const typeLabel = pulled.type === "Attack" ? "Attacking Card" : (pulled.type || "-");
+  const footerText = `${footer} • ${typeLabel}`;
+
+  const descPrefix = subtitle ? `${subtitle}\n\n` : "";
   const embed = new EmbedBuilder()
     .setTitle(pulled.name)
     .setColor(rankInfo?.color || 0x1abc9c)
-    .setDescription(`${description}\n\n${statsText}`)
-    .setFooter({ text: footer, iconURL: user.displayAvatarURL() });
+    .setDescription(`${descPrefix}${description}\n\n${statsText}`)
+    .setFooter({ text: footerText, iconURL: user.displayAvatarURL() });
 
   // leave space for rank icon and card image — if you paste URLs into the card definitions (cards.js)
   // rank icon comes from rank info map

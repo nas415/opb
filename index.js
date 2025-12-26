@@ -25,7 +25,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const commandFiles = fs.readdirSync("./commands").filter(file => file.endsWith(".js"));
 
 for (const file of commandFiles) {
-  const command = await import(`./commands/${file}`);
+  const imported = await import(`./commands/${file}`);
+  const command = imported.default || imported; // normalize default vs named exports
   // compute a safe command name (lowercased) from the SlashCommandBuilder
   let cmdName;
   try {
