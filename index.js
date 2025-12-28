@@ -239,6 +239,30 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => console.log(`Health server listening on port ${PORT}`));
 
+// Start an optional "dummy" server on port 3000 (or override with DUMMY_PORT).
+// This is useful on hosts that expect an app to bind a fixed port even if the
+// main service uses the platform-assigned $PORT. The dummy server tolerates
+// port-in-use errors so it won't crash the process.
+const DUMMY_PORT = Number(process.env.DUMMY_PORT || 3000);
+const dummyServer = http.createServer((req, res) => {
+  if (req.method === 'GET' && (req.url === '/' || req.url === '/dummy' || req.url === '/health')) {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    return res.end('OK - dummy');
+  }
+  res.writeHead(404);
+  res.end();
+});
+
+dummyServer.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.warn(`Dummy server port ${DUMMY_PORT} is already in use; skipping dummy server.`);
+  } else {
+    console.error('Dummy server error:', err);
+  }
+});
+
+dummyServer.listen(DUMMY_PORT, () => console.log(`Dummy server listening on port ${DUMMY_PORT}`));
+
 // Optional: auto-register slash commands if explicitly enabled
 if (process.env.REGISTER_COMMANDS_ON_START === 'true') {
   (async () => {

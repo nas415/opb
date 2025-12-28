@@ -40,6 +40,7 @@ ALL of the above
 - The app exposes a lightweight health endpoint: `GET /`, `GET /health` and `GET /_health` which return HTTP 200 `OK`.
 - Use UptimeRobot to ping your Render service URL (e.g., `https://your-service.onrender.com/health`) every 5 minutes to keep it continuously running.
 
+Note: If your host requires binding to a specific fixed port, you can set `DUMMY_PORT=3000` (default) and the app will attempt to start an additional dummy server on that port. The dummy server is optional and will not crash the app if the port is in use.
 Local testing:
 
 ```bash
