@@ -77,7 +77,20 @@ for (const file of eventFiles) {
   }
 }
 
-client.login(process.env.TOKEN);
+// Ensure we have a token and make login failures visible in Render logs
+if (!process.env.TOKEN) {
+  console.error("❌ TOKEN is not set in environment variables. Set TOKEN in your Render service settings.");
+  process.exit(1);
+}
+console.log(`Found TOKEN of length ${process.env.TOKEN.length} characters — attempting Discord login...`);
+
+try {
+  await client.login(process.env.TOKEN);
+  console.log("✅ Discord login initiated — waiting for ready event...");
+} catch (err) {
+  console.error("❌ Discord login failed:", err);
+  process.exit(1);
+}
 
 // Start a small HTTP server so Render and uptime monitors (e.g., UptimeRobot)
 // can check that the service is alive. This avoids adding express as a
