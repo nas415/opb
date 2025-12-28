@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
 import Progress from "../models/Progress.js";
 import { cards, getCardById, getRankInfo, RANKS } from "../cards.js";
+import { computeTeamBoosts, computeTeamBoostsDetailed } from "../lib/boosts.js";
 
 function levenshtein(a, b) {
   const dp = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
@@ -157,10 +158,31 @@ export async function execute(interactionOrMessage, client) {
     if (d < bestDiff) { bestDiff = d; chosenColor = r.color; }
   }
 
+  // compute and show team boosts (if any)
+  const detailed = (teamIds && teamIds.length) ? computeTeamBoostsDetailed(teamIds) : { totals: { atk:0,hp:0,special:0 }, details: [] };
+  const boosts = detailed.totals;
+  let boostLine = '';
+  if (boosts.atk) boostLine += `ATK +${boosts.atk}%`;
+  if (boosts.hp) boostLine += (boostLine ? ' • ' : '') + `HP +${boosts.hp}%`;
+  if (boosts.special) boostLine += (boostLine ? ' • ' : '') + `SPECIAL +${boosts.special}%`;
+
+  // append per-card boost info to each line
+  const linesWithBoost = teamIds.map((id, i) => {
+    const card = getCardById(id);
+    const entry = detailed.details.find(d => d && d.id === id) || { atk:0,hp:0,special:0 };
+    const parts = [];
+    if (entry.atk) parts.push(`ATK+${entry.atk}%`);
+    if (entry.hp) parts.push(`HP+${entry.hp}%`);
+    if (entry.special) parts.push(`SP+${entry.special}%`);
+    return `${lines[i]}${parts.length ? ' • Boost: ' + parts.join('/') : ''}`;
+  });
+
+  const desc = (linesWithBoost.length ? linesWithBoost.join("\n") : "No team set. Use `op team add <card>` or `/team add <card>`.") + (boostLine ? "\n\nTeam Boosts: " + boostLine : "");
+
   const embed = new EmbedBuilder()
     .setTitle(`${user.username}'s Team`)
     .setColor(chosenColor)
-    .setDescription(lines.length ? lines.join("\n") : "No team set. Use `op team add <card>` or `/team add <card>`.")
+    .setDescription(desc)
     .setFooter({ text: `Requested by ${user.username}`, iconURL: user.displayAvatarURL() });
 
   if (isInteraction) await interactionOrMessage.reply({ embeds: [embed] }); else await channel.send({ embeds: [embed] });

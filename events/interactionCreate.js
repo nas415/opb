@@ -119,12 +119,57 @@ export async function execute(interaction, client) {
     if (interaction.isButton()) {
       const id = interaction.customId || "";
       // only handle known prefixes
-      if (!id.startsWith("info_") && !id.startsWith("collection_") && !id.startsWith("quest_") && !id.startsWith("help_")) return;
+      if (!id.startsWith("info_") && !id.startsWith("collection_") && !id.startsWith("quest_") && !id.startsWith("help_") && !id.startsWith("drop_claim")) return;
 
       const parts = id.split(":");
       if (parts.length < 2) return;
       const action = parts[0];
       const ownerId = parts[1];
+
+      // HANDLE DROP CLAIMS: drop_claim:<token>
+      if (id.startsWith("drop_claim")) {
+        const token = parts[1];
+        try {
+          const drops = await import('../lib/drops.js');
+          const res = await drops.claimDrop(token, interaction.user.id);
+          if (!res.ok) {
+            if (res.reason === 'not_found') return interaction.reply({ content: 'This drop has expired or was not found.', ephemeral: true });
+            if (res.reason === 'already_claimed') return interaction.reply({ content: `This drop has already been claimed.`, ephemeral: true });
+            return interaction.reply({ content: 'Unable to claim drop.', ephemeral: true });
+          }
+
+          // edit original message to disable button and mark claimed
+          try {
+            const ch = await interaction.client.channels.fetch(res.channelId).catch(() => null);
+            if (ch && res.messageId) {
+              const msg = await ch.messages.fetch(res.messageId).catch(() => null);
+              if (msg) {
+                const disabledButton = new ButtonBuilder().setCustomId(`drop_claim:${token}`).setLabel('Claimed').setStyle(ButtonStyle.Secondary).setDisabled(true);
+                const disabledRow = new ActionRowBuilder().addComponents(disabledButton);
+                // update embed footer to indicate claimed
+                const embeds = msg.embeds || [];
+                if (embeds && embeds[0]) {
+                  const e = EmbedBuilder.from(embeds[0]);
+                  const footerText = (e.data.footer && e.data.footer.text ? e.data.footer.text : '') + ` • Claimed by ${interaction.user.tag}`;
+                  e.setFooter({ text: footerText });
+                  await msg.edit({ embeds: [e], components: [disabledRow] }).catch(() => {});
+                } else {
+                  await msg.edit({ components: [disabledRow] }).catch(() => {});
+                }
+              }
+            }
+          } catch (e) {
+            // ignore
+            console.error('Error editing drop message after claim:', e && e.message ? e.message : e);
+          }
+
+          await interaction.reply({ content: `You claimed **${res.card.name}** (Lv ${res.level}) — check your collection.`, ephemeral: true });
+          return;
+        } catch (e) {
+          console.error('drop claim handler error:', e && e.message ? e.message : e);
+          return interaction.reply({ content: 'Error processing claim.', ephemeral: true });
+        }
+      }
 
       // HELP category buttons: help_cat:<category>:<userId>
       if (id.startsWith("help_cat")) {

@@ -57,10 +57,6 @@ console.log('Command keys:', [...client.commands.keys()].slice(0, 50).join(', ')
 // simple message-based prefix handling: prefix is "op" (case-insensitive)
 client.on("messageCreate", async (message) => {
   try {
-    // Diagnostics: log incoming messages (truncated) so you can confirm the bot receives them in Render logs
-    const preview = (message.content || '').slice(0, 200).replace(/\n/g, ' ');
-    console.log(`messageCreate from ${message.author?.tag || message.author?.id} (bot=${message.author?.bot}) preview="${preview}"`);
-
     if (!message.content) return;
     if (message.author?.bot) return;
 
@@ -74,7 +70,6 @@ client.on("messageCreate", async (message) => {
     const command = client.commands.get(commandName);
 
     if (!command) {
-      console.log(`Unknown message command requested: ${commandName}`);
       return;
     }
 
@@ -439,19 +434,6 @@ if (!process.env.TOKEN) {
       globalThis.GATEWAY_MODE = 'disabled';
       return;
     }
-
-    // Optional initial delay before attempting gateway login. Useful for hosts like Render
-    // where networking or other services may not be fully ready immediately after process start.
-    const STARTUP_LOGIN_DELAY_MS = Number(process.env.STARTUP_LOGIN_DELAY_MS) || 5000;
-    if (STARTUP_LOGIN_DELAY_MS > 0) {
-      console.log(`Delaying gateway login by ${STARTUP_LOGIN_DELAY_MS}ms to allow environment to settle...`);
-      await sleep(STARTUP_LOGIN_DELAY_MS);
-    }
-
-    // Additional diagnostics to help Render debugging
-    client.on('warn', (w) => console.warn('client warn:', w));
-    process.on('unhandledRejection', (r) => console.error('unhandledRejection:', r));
-    process.on('uncaughtException', (err) => console.error('uncaughtException:', err));
 
     (async function gatewayLoop(){
       while (true) {

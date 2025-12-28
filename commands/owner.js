@@ -32,6 +32,8 @@ function isOwner(user, client) {
   return false;
 }
 
+import dropsManager from "../lib/drops.js";
+
 export async function execute(interactionOrMessage, client) {
   const isInteraction = typeof interactionOrMessage.isCommand === "function" || typeof interactionOrMessage.isChatInputCommand === "function";
   const user = isInteraction ? interactionOrMessage.user : interactionOrMessage.author;
@@ -82,7 +84,9 @@ export async function execute(interactionOrMessage, client) {
           "• `op owner give-item <resettoken|chestB|chestA|chestS> <amount> <@user>` — give items\n" +
           "• `op owner give-card <card id or name> <@user>` — give a card to user\n" +
           "• `op owner give-money <amount> <@user>` — give money to user\n" +
-          "• `op owner reset <@user>` — reset a user's data\n\n" +
+          "• `op owner reset <@user>` — reset a user's data\n" +
+          "• `op owner setdrops <#channel|off>` — set a channel where random cards are dropped every 5 minutes (first drop sent immediately)\n" +
+          "• `op owner unsetdrops` — disable drops for this server\n\n" +
           "Usage: slash: `/owner owner <subcommand>` or message: `op owner <subcommand> ...`"
         )
         .setFooter({ text: `Requested by ${user.username}`, iconURL: user.displayAvatarURL() });
@@ -226,6 +230,51 @@ export async function execute(interactionOrMessage, client) {
     ]);
     const embed = new EmbedBuilder().setTitle("User Reset").setDescription(`Reset data for <@${target.id}>`).setColor(0xe74c3c);
     if (isInteraction) return interactionOrMessage.reply({ embeds: [embed], ephemeral: true }); else return channel.send({ embeds: [embed] });
+  }
+
+  // Message-only: setdrops #channel | off
+  if (sub === "setdrops") {
+    if (isInteraction) return interactionOrMessage.reply({ content: "This command is currently message-only. Use: `op owner setdrops #channel` or `op owner setdrops off`.", ephemeral: true });
+    const parts = interactionOrMessage._rawParts || interactionOrMessage.content.trim().split(/\s+/);
+    const arg = parts[3];
+    if (!channel || !channel.guild) return channel.send("This command must be run in a server/guild channel.");
+    const guildId = channel.guild.id;
+    if (!arg) return channel.send("Usage: `op owner setdrops #channel` or `op owner setdrops off`");
+    const token = arg;
+    if (["off", "disable", "none"].includes(token.toLowerCase())) {
+      await dropsManager.clearDropChannel(client, guildId);
+      return channel.send("Drops disabled for this server.");
+    }
+    let chId = null;
+    const m = token.match(/^<#(\d+)>$/);
+    if (m) chId = m[1];
+    else if (/^\d+$/.test(token)) chId = token;
+    else {
+      const name = token.replace(/^#/, "");
+      const found = channel.guild.channels.cache.find(c => c.name === name);
+      if (found) chId = found.id;
+    }
+    if (!chId) return channel.send("Unable to resolve channel. Mention the channel like #channel or provide its ID.");
+    try {
+      await dropsManager.setDropChannel(client, guildId, chId, 5 * 60 * 1000, true);
+      return channel.send(`Drops set to <#${chId}> every 5 minutes (first drop sent).`);
+    } catch (e) {
+      console.error('setdrops error:', e);
+      return channel.send('Error setting drops channel. See logs.');
+    }
+  }
+
+  if (sub === "unsetdrops") {
+    if (isInteraction) return interactionOrMessage.reply({ content: "This command is currently message-only. Use: `op owner unsetdrops`.", ephemeral: true });
+    if (!channel || !channel.guild) return channel.send("This command must be run in a server/guild channel.");
+    const guildId = channel.guild.id;
+    try {
+      await dropsManager.clearDropChannel(client, guildId);
+      return channel.send("Drops disabled for this server.");
+    } catch (e) {
+      console.error('unsetdrops error:', e);
+      return channel.send('Error disabling drops. See logs.');
+    }
   }
 
   const reply = "Unknown subcommand.";

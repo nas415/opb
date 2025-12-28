@@ -3,6 +3,7 @@ import Balance from "../models/Balance.js";
 import Duel from "../models/Duel.js";
 import Progress from "../models/Progress.js";
 import { getCardById } from "../cards.js";
+import { computeTeamBoosts } from "../lib/boosts.js";
 import Quest from "../models/Quest.js";
 
 const DUEL_SESSIONS = global.__DUEL_SESSIONS ||= new Map();
@@ -146,6 +147,8 @@ export async function execute(interactionOrMessage) {
         return null;
       }
 
+      // compute team-wide boosts (hp/atk/special) for p1
+      const p1TeamBoosts = computeTeamBoosts(p1Progress.team || []);
       const p1Cards = p1Progress.team.map(cardId => {
         const card = getCardById(cardId);
         const hasMap = p1Progress.cards && typeof p1Progress.cards.get === 'function';
@@ -182,9 +185,28 @@ export async function execute(interactionOrMessage) {
           }
         }
 
-        return { cardId, card, scaled: { attackRange: [attackMin, attackMax], specialAttack: special, power }, health, maxHealth: health, level };
+        // Apply team boosts
+        if (p1TeamBoosts.atk) {
+          const atkMul = 1 + (p1TeamBoosts.atk / 100);
+          attackMin = Math.round(attackMin * atkMul);
+          attackMax = Math.round(attackMax * atkMul);
+          power = Math.round(power * atkMul);
+        }
+        if (p1TeamBoosts.hp) {
+          const hpMul = 1 + (p1TeamBoosts.hp / 100);
+          health = Math.round(health * hpMul);
+        }
+        if (special && p1TeamBoosts.special) {
+          const spMul = 1 + (p1TeamBoosts.special / 100);
+          special.range = [Math.round(special.range[0] * spMul), Math.round(special.range[1] * spMul)];
+        }
+
+        // Track special usage and exhaustion state for match
+        return { cardId, card, scaled: { attackRange: [attackMin, attackMax], specialAttack: special, power }, health, maxHealth: health, level, usedSpecial: false, skipNextTurnPending: false, skipThisTurn: false };
       });
 
+      // compute team-wide boosts (hp/atk/special) for p2
+      const p2TeamBoosts = computeTeamBoosts(p2Progress.team || []);
       const p2Cards = p2Progress.team.map(cardId => {
         const card = getCardById(cardId);
         const hasMap = p2Progress.cards && typeof p2Progress.cards.get === 'function';
@@ -271,6 +293,8 @@ async function startDuelTurn(sessionId, channel) {
       side.lifeIndex = idx === -1 ? side.cards.length : idx;
     }
   }
+  // convert any pending skip flags (cards that used special last match-turn) into active exhaustion for this turn
+  attacker.cards.forEach(c => { if (c.skipNextTurnPending) { c.skipThisTurn = true; c.skipNextTurnPending = false; } });
   normalizeLifeIndex(attacker);
   normalizeLifeIndex(defender);
 
@@ -292,7 +316,8 @@ async function startDuelTurn(sessionId, channel) {
   const lines = attacker.cards.map((c, idx) => {
     const name = c.card.name;
     const hp = Math.max(0, c.health);
-    return `**${idx + 1}. ${name}** — HP: ${hp}/${c.maxHealth} ${renderHP(hp, c.maxHealth)}`;
+    const extra = c.skipThisTurn ? ' (exhausted)' : '';
+    return `**${idx + 1}. ${name}**${extra} — HP: ${hp}/${c.maxHealth} ${renderHP(hp, c.maxHealth)}`;
   }).join('\n');
 
   const embed = makeEmbed(
@@ -300,13 +325,13 @@ async function startDuelTurn(sessionId, channel) {
     `${attacker.user}, choose a character to attack with!\n\n${lines}`
   );
 
-  // Buttons for characters (disable dead ones)
+  // Buttons for characters (disable dead or exhausted ones)
   const charButtons = attacker.cards.map((card, idx) => {
     return new ButtonBuilder()
       .setCustomId(`duel_selectchar:${sessionId}:${idx}`)
       .setLabel(`${card.card.name}`)
       .setStyle(ButtonStyle.Primary)
-      .setDisabled(card.health <= 0);
+      .setDisabled(card.health <= 0 || card.skipThisTurn);
   });
 
   const rows = [];
@@ -352,7 +377,7 @@ async function selectAttackType(sessionId, charIdx, msg, attacker, channel) {
   const defender = session.currentTurn === session.p1.userId ? session.p2 : session.p1;
   const card = attacker.cards[charIdx];
 
-  const hasSpecial = !!card.card.specialAttack;
+  const hasSpecial = !!card.card.specialAttack && !card.usedSpecial;
   const normalRange = card.scaled ? card.scaled.attackRange : (card.card.attackRange || [0,0]);
   const specialRange = card.scaled && card.scaled.specialAttack ? card.scaled.specialAttack.range : (card.card.specialAttack ? card.card.specialAttack.range : null);
   const embed = makeEmbed(
@@ -511,6 +536,13 @@ async function executeAttack(sessionId, charIdx, attackType, targetIdx, msg, att
     `${resultText}\n\n${targetCard.card.name} HP: ${Math.max(0, targetCard.health)}/${targetCard.maxHealth} ${renderHP(Math.max(0, targetCard.health), targetCard.maxHealth)}`
   );
 
+  // If special attack happened and there's a gif, add it for visuals
+  if (isSpecial && attackerCard.card && attackerCard.card.specialAttack && attackerCard.card.specialAttack.gif) {
+    try {
+      embed.setImage(attackerCard.card.specialAttack.gif);
+    } catch (e) {}
+  }
+
   try {
     await msg.edit({ embeds: [embed], components: [] });
   } catch (e) {}
@@ -607,4 +639,32 @@ async function endDuel(sessionId, winner, loser, channel) {
   }
 
   DUEL_SESSIONS.delete(sessionId);
+}
+
+export async function forfeitByUser(userId, channel, requester) {
+  // find an active session with this user
+  for (const [sid, sess] of DUEL_SESSIONS.entries()) {
+    const p1 = sess.p1, p2 = sess.p2;
+    if (p1.userId === userId || p2.userId === userId) {
+      const loser = p1.userId === userId ? p1 : p2;
+      const winner = p1.userId === userId ? p2 : p1;
+      try {
+        const embed = makeEmbed("Duel Forfeited", `${loser.user.username} has forfeited the duel. ${winner.user.username} wins.`);
+        try {
+          const msg = await channel.messages.fetch(sess.msgId);
+          await msg.reply({ embeds: [embed] });
+        } catch (e) {
+          await channel.send({ embeds: [embed] });
+        }
+        await endDuel(sid, winner, loser, channel);
+      } catch (e) {
+        console.error("Error resolving forfeit:", e);
+        if (requester && requester.reply) {
+          try { await requester.reply({ content: 'Failed to forfeit the duel.', ephemeral: true }); } catch(e) {}
+        }
+      }
+      return true;
+    }
+  }
+  return false;
 }
