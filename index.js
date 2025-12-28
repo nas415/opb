@@ -77,24 +77,9 @@ for (const file of eventFiles) {
   }
 }
 
-// Ensure we have a token and make login failures visible in Render logs
-if (!process.env.TOKEN) {
-  console.error("❌ TOKEN is not set in environment variables. Set TOKEN in your Render service settings.");
-  process.exit(1);
-}
-console.log(`Found TOKEN of length ${process.env.TOKEN.length} characters — attempting Discord login...`);
-
-try {
-  await client.login(process.env.TOKEN);
-  console.log("✅ Discord login initiated — waiting for ready event...");
-} catch (err) {
-  console.error("❌ Discord login failed:", err);
-  process.exit(1);
-}
-
-// Start a small HTTP server so Render and uptime monitors (e.g., UptimeRobot)
-// can check that the service is alive. This avoids adding express as a
-// dependency and works with Render's $PORT environment variable.
+// Start a small HTTP server FIRST so Render and uptime monitors (e.g., UptimeRobot)
+// can check that the service is alive even if Discord login hangs. This avoids
+// adding express as a dependency and works with Render's $PORT environment variable.
 import http from "http";
 
 const PORT = process.env.PORT || 3000;
@@ -105,8 +90,48 @@ const server = http.createServer((req, res) => {
     return res.end("OK");
   }
 
+  if (req.method === "GET" && req.url === "/status") {
+    const payload = {
+      status: "ok",
+      port: PORT,
+      discord: client.user ? `${client.user.tag}` : null,
+      uptimeSeconds: Math.floor(process.uptime()),
+    };
+    res.writeHead(200, { "Content-Type": "application/json" });
+    return res.end(JSON.stringify(payload));
+  }
+
   res.writeHead(404);
   res.end();
 });
 
 server.listen(PORT, () => console.log(`Health server listening on port ${PORT}`));
+
+// Ensure we have a token and make login failures visible in Render logs
+if (!process.env.TOKEN) {
+  console.error("❌ TOKEN is not set in environment variables. Set TOKEN in your Render service settings.");
+  // Keep the process alive so you can inspect the service; don't exit immediately
+} else {
+  console.log(`Found TOKEN of length ${process.env.TOKEN.length} characters — attempting Discord login...`);
+
+  // Wrap login with a timeout so a hanging login doesn't prevent Render from marking
+  // the service as running (it will still be restartable if we choose to exit on error).
+  const loginWithTimeout = (token, ms = 30000) => {
+    return Promise.race([
+      client.login(token),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Discord login timed out")), ms)),
+    ]);
+  };
+
+  (async () => {
+    try {
+      await loginWithTimeout(process.env.TOKEN, 30000);
+      console.log("✅ Discord login initiated — waiting for ready event...");
+    } catch (err) {
+      console.error("❌ Discord login failed:", err);
+      // Exit to ensure the deployment shows a failure if desired; comment out
+      // to keep the process alive for debugging.
+      process.exit(1);
+    }
+  })();
+}
