@@ -50,3 +50,17 @@ curl http://localhost:3000/health
 ---
 
 If you'd like, I can add a `Procfile`, a `render.yaml` template, or step-by-step instructions for creating the Render service.
+
+---
+
+## Security notice ⚠️
+
+I noticed a `.env` file with secrets in the repository. **If a bot token or other secret has been committed, rotate it immediately** from the Discord Developer Portal and any other provider (MongoDB, etc.). To remove the file from the repo and prevent future leaks:
+
+```bash
+git rm --cached .env
+git commit -m "remove .env containing secrets"
+git push
+```
+
+The project already contains `.gitignore` with `.env`, but removing the committed file and rotating secrets is required to secure the bot.

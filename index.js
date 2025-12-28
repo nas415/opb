@@ -112,25 +112,85 @@ if (!process.env.TOKEN) {
   console.error("❌ TOKEN is not set in environment variables. Set TOKEN in your Render service settings.");
   // Keep the process alive so you can inspect the service; don't exit immediately
 } else {
-  console.log(`Found TOKEN of length ${process.env.TOKEN.length} characters — attempting Discord login...`);
+  console.log(`Found TOKEN of length ${process.env.TOKEN.length} characters — performing pre-login checks...`);
 
-  // Wrap login with a timeout so a hanging login doesn't prevent Render from marking
-  // the service as running (it will still be restartable if we choose to exit on error).
-  const loginWithTimeout = (token, ms = 30000) => {
-    return Promise.race([
-      client.login(token),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Discord login timed out")), ms)),
-    ]);
+  // Diagnostic helpers: check DNS and the Discord REST API for token validity.
+  const { lookup } = await import('dns/promises');
+
+  const checkDiscordReachable = async () => {
+    try {
+      const addresses = await lookup('discord.com');
+      console.log('✅ DNS lookup for discord.com succeeded:', addresses);
+      return { ok: true };
+    } catch (err) {
+      console.error('❌ DNS lookup for discord.com failed:', err && err.message ? err.message : err);
+      return { ok: false, error: err };
+    }
+  };
+
+  const checkTokenRest = async (token) => {
+    try {
+      const resp = await fetch('https://discord.com/api/v10/users/@me', {
+        headers: { Authorization: `Bot ${token}` },
+        method: 'GET',
+      });
+      if (resp.status === 200) {
+        const body = await resp.json();
+        console.log('✅ Token REST check succeeded, bot:', body.username ? `${body.username}#${body.discriminator || '????'}` : body);
+        return { ok: true, body };
+      }
+      if (resp.status === 401) {
+        console.error('❌ Token REST check failed: 401 Unauthorized — invalid token');
+        return { ok: false, error: 'invalid_token', status: 401 };
+      }
+      console.error('❌ Token REST check returned status', resp.status);
+      return { ok: false, status: resp.status };
+    } catch (err) {
+      console.error('❌ Token REST check threw an error:', err && err.message ? err.message : err);
+      return { ok: false, error: err };
+    }
   };
 
   (async () => {
+    const dnsRes = await checkDiscordReachable();
+    const tokenRes = await checkTokenRest(process.env.TOKEN);
+
+    if (!dnsRes.ok) {
+      console.error('Network/DNS check failed — outbound network to discord.com may be blocked from this environment.');
+      // Keep process alive for debugging instead of exiting so Render shows the service as up
+      // and you can inspect logs / try redeploying with network changes.
+      // Optionally exit to fail the deployment: process.exit(1);
+    }
+
+    if (!tokenRes.ok) {
+      if (tokenRes.error === 'invalid_token' || tokenRes.status === 401) {
+        console.error('❌ The provided TOKEN is invalid. Rotate the bot token and update Render environment variables.');
+        process.exit(1);
+      }
+      console.error('Token REST check failed:', tokenRes);
+      // Continue and attempt websocket login; it may still succeed if REST is flaky.
+    }
+
+    // Add more event diagnostics for connection issues
+    client.on('error', (err) => console.error('client error:', err));
+    client.on('shardError', (err) => console.error('shard error:', err));
+    client.on('shardDisconnect', (event, shardId) => console.warn('shard disconnect:', { event, shardId }));
+
+    // Wrap login with a timeout so a hanging login doesn't indefinitely block deploy. Use 60s here.
+    const loginWithTimeout = (token, ms = 60000) => {
+      return Promise.race([
+        client.login(token),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Discord login timed out')), ms)),
+      ]);
+    };
+
     try {
-      await loginWithTimeout(process.env.TOKEN, 30000);
-      console.log("✅ Discord login initiated — waiting for ready event...");
+      console.log('Attempting websocket login (this may take a few seconds)...');
+      await loginWithTimeout(process.env.TOKEN, 60000);
+      console.log('✅ Discord login initiated — waiting for ready event...');
     } catch (err) {
-      console.error("❌ Discord login failed:", err);
-      // Exit to ensure the deployment shows a failure if desired; comment out
-      // to keep the process alive for debugging.
+      console.error('❌ Discord websocket login failed:', err && err.message ? err.message : err);
+      // If login fails due to networking, don't immediately exit so you can debug; exit on invalid token was handled earlier.
       process.exit(1);
     }
   })();
