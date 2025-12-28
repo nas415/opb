@@ -243,17 +243,15 @@ export default {
       return;
     }
 
-    // Calculate new level: each level requires (level+1)*100 XP total
-    // E.g., Level 0->1 requires 100 XP (1*100), Level 1->2 requires 200 XP (2*100), etc.
-    let computedLevel = 0;
-    let remainingXp = entry.xp;
-    while (remainingXp >= (computedLevel + 1) * 100) {
-      remainingXp -= (computedLevel + 1) * 100;
-      computedLevel++;
+    // Each level is always 100 XP (flat, not increasing)
+    let totalXp = (entry.xp || 0) + xpToAdd;
+    let newLevel = entry.level || 0;
+    while (totalXp >= 100) {
+      totalXp -= 100;
+      newLevel += 1;
     }
-    entry.xp = remainingXp;
-    const prevLevel = entry.level || 0;
-    entry.level = Math.max(prevLevel, computedLevel);
+    entry.xp = totalXp;
+    entry.level = newLevel;
 
     // Update the Map and mark as modified
     progress.cards.set(card.id, entry);

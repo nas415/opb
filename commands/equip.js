@@ -92,9 +92,9 @@ export async function execute(interactionOrMessage, client) {
     return;
   }
 
-  // Check if card is combat type
-  if (card.type !== "Attack" && card.type !== "Defense" && card.type !== "Combat") {
-    const reply = `You can only equip weapons to Combat cards. ${card.name} is a ${card.type} card.`;
+  // Only allow weapon to be equipped to its signature card
+  if (!weapon.signatureCards || !weapon.signatureCards.includes(card.id)) {
+    const reply = `You can only equip **${weapon.name}** to its signature card(s).`;
     if (isInteraction) await interactionOrMessage.reply({ content: reply, ephemeral: true });
     else await channel.send(reply);
     return;
@@ -197,7 +197,13 @@ export async function execute(interactionOrMessage, client) {
     return;
   }
 
-  const boostMultiplier = weapon.signatureCards && weapon.signatureCards.includes(card.id) ? 1.25 : 1;
+  // Only apply 25% signature multiplier when the equipped card is listed in the weapon's
+  // signatureCards at index > 0 (upgrade 2+). This prevents base form from getting the extra 25%.
+  let boostMultiplier = 1;
+  if (weapon.signatureCards && Array.isArray(weapon.signatureCards)) {
+    const idx = weapon.signatureCards.indexOf(card.id);
+    if (idx > 0) boostMultiplier = 1.25;
+  }
   const boostText = boostMultiplier === 1.25 ? " (25% signature boost applied!)" : "";
 
   const embed = new EmbedBuilder()

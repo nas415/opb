@@ -132,16 +132,8 @@ export async function execute(interactionOrMessage, client) {
     const winv = await WeaponInventory.findOne({ userId });
     const userWeapon = winv ? (winv.weapons instanceof Map ? winv.weapons.get(card.id) : winv.weapons?.[card.id]) : null;
     
-    // Check if this is a signature weapon equipped to its card
-    let isSignatureBoosted = false;
-    if (userWeapon && userWeapon.equippedTo) {
-      const equippedCard = getCardById(userWeapon.equippedTo);
-      if (equippedCard && equippedCard.signatureWeapon === card.id) {
-        isSignatureBoosted = true;
-      }
-    }
-    
-    const weaponEmbed = userWeapon ? buildUserWeaponEmbed(card, userWeapon, user, isSignatureBoosted) : buildWeaponEmbed(card, user);
+    // Always show base weapon stats first; the "Your stats" button will show user-specific view
+    const weaponEmbed = buildWeaponEmbed(card, user);
     if (!weaponEmbed) {
       const reply = `Unable to display weapon info for ${card.name}.`;
       if (isInteraction) await interactionOrMessage.reply({ content: reply, ephemeral: true }); else await channel.send(reply);

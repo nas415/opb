@@ -551,12 +551,16 @@ export async function execute(interaction, client) {
           return;
         }
 
-        // Check if this is a signature weapon equipped to a card
+        // Check if this is a signature weapon equipped to a card and whether the 25% applies
+        // The 25% signature boost only applies when the equipped card appears at index > 0
+        // in the weapon's `signatureCards` list (i.e. upgrade 2+), not the base form.
         let isSignatureBoosted = false;
-        if (userWeapon.equippedTo) {
+        const weaponCard = getCardById(weaponId);
+        if (userWeapon.equippedTo && weaponCard && Array.isArray(weaponCard.signatureCards)) {
           const equippedCard = getCardById(userWeapon.equippedTo);
-          if (equippedCard && equippedCard.signatureWeapon === weaponId) {
-            isSignatureBoosted = true;
+          if (equippedCard) {
+            const idx = weaponCard.signatureCards.indexOf(equippedCard.id);
+            if (idx > 0) isSignatureBoosted = true;
           }
         }
 
@@ -716,13 +720,18 @@ export async function execute(interaction, client) {
           return power + health * 0.2;
         }
 
-        if (sortKey === "best") items.sort((a, b) => computeScoreLocal(b.card, b.entry) - computeScoreLocal(a.card, a.entry));
-        else if (sortKey === "wtb") items.sort((a, b) => computeScoreLocal(a.card, a.entry) - computeScoreLocal(b.card, b.entry));
-        else if (sortKey === "lbtw") items.sort((a, b) => (b.entry.level || 0) - (a.entry.level || 0));
-        else if (sortKey === "lwtb") items.sort((a, b) => (a.entry.level || 0) - (b.entry.level || 0));
-        else if (sortKey === "rank") items.sort((a, b) => (getRankInfo(b.card.rank)?.value || 0) - (getRankInfo(a.card.rank)?.value || 0));
-        else if (sortKey === "nto") items.sort((a, b) => (b.entry.acquiredAt || 0) - (a.entry.acquiredAt || 0));
-        else if (sortKey === "otn") items.sort((a, b) => (a.entry.acquiredAt || 0) - (b.entry.acquiredAt || 0));
+        // Normalize sort key aliases (some places use 'level_desc'/'level_asc')
+      let mode = sortKey;
+      if (mode === 'level_desc' || mode === 'lbtw') mode = 'lbtw';
+      if (mode === 'level_asc' || mode === 'lwtb') mode = 'lwtb';
+
+      if (mode === "best") items.sort((a, b) => computeScoreLocal(b.card, b.entry) - computeScoreLocal(a.card, a.entry));
+      else if (mode === "wtb") items.sort((a, b) => computeScoreLocal(a.card, a.entry) - computeScoreLocal(b.card, b.entry));
+      else if (mode === "lbtw") items.sort((a, b) => (b.entry.level || 0) - (a.entry.level || 0));
+      else if (mode === "lwtb") items.sort((a, b) => (a.entry.level || 0) - (b.entry.level || 0));
+      else if (mode === "rank") items.sort((a, b) => (getRankInfo(b.card.rank)?.value || 0) - (getRankInfo(a.card.rank)?.value || 0));
+      else if (mode === "nto") items.sort((a, b) => (b.entry.acquiredAt || 0) - (a.entry.acquiredAt || 0));
+      else if (mode === "otn") items.sort((a, b) => (a.entry.acquiredAt || 0) - (b.entry.acquiredAt || 0));
 
         const PAGE_SIZE = 5;
         const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));

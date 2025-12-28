@@ -12,6 +12,7 @@ export const RANKS = {
 
 export const cards = [
   // LUFFY PROGRESSION - Chronological (Kid -> Dawn Island -> Captain -> Worst Gen -> Emperor -> Warrior)
+  // ...existing card objects...
   {
     id: "luffy_c_01",
     name: "Monkey D. Luffy",
@@ -1135,7 +1136,7 @@ export const cards = [
     power: 16,
     attackRange: [3, 11],
     health: 60,
-    type: "Support",
+    type: "Attack",
     ability: null,
     image: "https://files.catbox.moe/y1g60e.jpg",
     evolutions: ["usopp_c_02"],
@@ -1148,7 +1149,7 @@ export const cards = [
     power: 24,
     attackRange: [6, 14],
     health: 71,
-    type: "Support",
+    type: "Attack",
     ability: null,
     image: "https://files.catbox.moe/sy77mg.webp",
     evolutions: ["usopp_c_03"],
@@ -1163,7 +1164,7 @@ export const cards = [
     power: 28,
     attackRange: [7, 15],
     health: 76,
-    type: "Support",
+    type: "Attack",
     specialAttack: { name: "Rubber band of Doom", range: [75, 110] },
     ability: null,
     image: "https://files.catbox.moe/ir1an0.jpg",
@@ -1179,27 +1180,13 @@ export const cards = [
     power: 85,
     attackRange: [16, 34],
     health: 170,
-    type: "Support",
+    type: "Attack",
     specialAttack: { name: "Cherry 分쇄 (Pound)", range: [95, 140] },
     ability: null,
     image: "https://files.catbox.moe/c5sl6v.jpg",
     evolutions: [],
     isUpgrade: true,
     upgradeRequirements: { cost: 3200, minLevel: 22 },
-  },
-  // YASSOP
-  {
-    id: "yassop_a_01",
-    name: "Yassop",
-    title: "Senior Officer of the Red-Haired Pirates",
-    rank: "A",
-    power: 155,
-    attackRange: [28, 50],
-    health: 240,
-    type: "Attack",
-    ability: null,
-    image: "https://files.catbox.moe/vzt741.webp",
-    evolutions: [],
   },
   // KAYA
   {
@@ -1859,7 +1846,6 @@ export const cards = [
     rank: "C",
     power: 18,
     attackRange: [4, 12],
-    health: 64,
     type: "Support",
     ability: null,
     image: "https://files.catbox.moe/tru671.webp",
@@ -1872,6 +1858,8 @@ export const cards = [
     title: "Roronoa Zoro's weapon",
     rank: "SS",
     type: "weapon",
+    // Not directly pullable — only the blueprint should be pullable
+    pullable: false,
     boost: { atk: 20, spd: 0, hp: 0 },
     signatureCards: ["roronoazoro_c_01", "roronoazoro_a_02", "roronoazoro_a_03", "roronoazoro_s_04", "roronoazoro_ss_05", "shimotsukikuina_b_01"],
     mainCard: "roronoazoro_s_04",
@@ -1898,7 +1886,377 @@ export const cards = [
     evolutions: ["wadoichimonji_ss_01"],
     isUpgrade: false,
   },
+  // --- USER ADDED CARDS ---
+  // GOL D. ROGER
+  {
+    id: "GolDRoger_ss_01",
+    name: "Gol D. Roger",
+    title: "Pirate captain",
+    rank: "SS",
+    power: 700,
+    attackRange: [100, 150],
+    health: 600,
+    type: "Attack",
+    ability: null,
+    image: "https://files.catbox.moe/rm13ps.webp",
+    evolutions: ["GolDRoger_ss_02"],
+  },
+  {
+    id: "GolDRoger_ss_02",
+    name: "Gol D. Roger",
+    title: "Captain of the Roger pirates",
+    rank: "SS",
+    power: 800,
+    attackRange: [120, 170],
+    health: 700,
+    type: "Attack",
+    ability: null,
+    image: "https://files.catbox.moe/934uq8.webp",
+    evolutions: ["GolDRoger_ur_03"],
+    isUpgrade: true,
+    upgradeRequirements: { cost: 50000, minLevel: 80 },
+  },
+  {
+    id: "GolDRoger_ur_03",
+    name: "Gol D. Roger",
+    title: "King of the Pirates",
+    rank: "UR",
+    power: 1200,
+    attackRange: [180, 250],
+    health: 900,
+    type: "Attack",
+    ability: null,
+    image: "https://files.catbox.moe/9nu1eb.webp",
+    evolutions: [],
+    isUpgrade: true,
+    upgradeRequirements: { cost: 120000, minLevel: 120 },
+  },
+  // TASHIGI
+  {
+    id: "Tashigi_b_01",
+    name: "Tashigi",
+    title: "Chief Petty Officer",
+    rank: "B",
+    power: 60,
+    attackRange: [10, 20],
+    health: 120,
+    type: "Attack",
+    ability: null,
+    image: "https://files.catbox.moe/w8pusf.webp",
+    evolutions: ["Tashigi_b_02"],
+  },
+  {
+    id: "Tashigi_b_02",
+    name: "Tashigi",
+    title: "Marine Officer",
+    rank: "B",
+    power: 90,
+    attackRange: [18, 30],
+    health: 150,
+    type: "Attack",
+    ability: null,
+    image: "https://files.catbox.moe/sgc8ox.webp",
+    evolutions: [],
+    isUpgrade: true,
+    upgradeRequirements: { cost: 8000, minLevel: 20 },
+  },
+  // SMOKER
+  {
+    id: "smoker_c_01",
+    name: "Smoker",
+    title: "kid Smoker",
+    rank: "C",
+    power: 35,
+    attackRange: [7, 15],
+    health: 90,
+    type: "Attack",
+    ability: null,
+    image: "https://files.catbox.moe/kuj974.webp",
+    evolutions: ["smoker_a_02"],
+  },
+  {
+    id: "smoker_a_02",
+    name: "Smoker",
+    title: "Commodore",
+    rank: "A",
+    power: 180,
+    attackRange: [30, 50],
+    health: 220,
+    type: "Attack",
+    ability: null,
+    image: "https://files.catbox.moe/l0fqrb.webp",
+    evolutions: ["smoker_a_03"],
+    isUpgrade: true,
+    upgradeRequirements: { cost: 12000, minLevel: 30 },
+  },
+  {
+    id: "smoker_a_03",
+    name: "Smoker",
+    title: "Captain",
+    rank: "A",
+    power: 150,
+    attackRange: [25, 40],
+    health: 200,
+    type: "Attack",
+    ability: null,
+    image: "https://files.catbox.moe/44hh7g.webp",
+    evolutions: ["Smoker_s_04"],
+    isUpgrade: true,
+    upgradeRequirements: { cost: 20000, minLevel: 50 },
+  },
+  {
+    id: "Smoker_s_04",
+    name: "Smoker",
+    title: "Vice Admiral",
+    rank: "S",
+    power: 350,
+    attackRange: [60, 90],
+    health: 320,
+    type: "Attack",
+    ability: null,
+    image: "https://files.catbox.moe/0xsg9e.webp",
+    evolutions: [],
+    isUpgrade: true,
+    upgradeRequirements: { cost: 40000, minLevel: 80 },
+  },
+  // LOGUETOWN (all title: "Loguetown")
+  { id: "Ipponmatsu_c_01", name: "Ipponmatsu", title: "Loguetown", rank: "C", power: 20, attackRange: [4, 10], health: 60, type: "Support", ability: null, image: "https://files.catbox.moe/qjn9e6.webp" },
+  { id: "Ipponume_c_01", name: "Ipponume", title: "Loguetown", rank: "C", power: 18, attackRange: [3, 9], health: 55, type: "Support", ability: null, image: "https://files.catbox.moe/49cy4x.webp" },
+  { id: "Yu_c_01", name: "Yu", title: "Loguetown", rank: "C", power: 15, attackRange: [2, 8], health: 50, type: "Support", ability: null, image: "https://files.catbox.moe/7z8bah.webp" },
+  { id: "sapi_c_01", name: "Sapi", title: "Loguetown", rank: "C", power: 16, attackRange: [3, 8], health: 52, type: "Support", ability: null, image: "https://files.catbox.moe/rvpde0.webp" },
+  { id: "Hanger_c_01", name: "Hanger", title: "Loguetown", rank: "C", power: 17, attackRange: [3, 9], health: 54, type: "Support", ability: null, image: "https://files.catbox.moe/c8j66i.webp" },
+  { id: "Packy_c_01", name: "Packy", title: "Loguetown", rank: "C", power: 15, attackRange: [2, 7], health: 51, type: "Support", ability: null, image: "https://files.catbox.moe/nnzsv4.webp" },
+  { id: "Mashikaku_c_01", name: "Mashikaku", title: "Loguetown", rank: "C", power: 19, attackRange: [4, 10], health: 58, type: "Support", ability: null, image: "https://files.catbox.moe/d99ex1.webp" },
+  { id: "Ed_c_01", name: "Ed", title: "Loguetown", rank: "C", power: 16, attackRange: [3, 8], health: 53, type: "Support", ability: null, image: "https://files.catbox.moe/0r0029.webp" },
+  { id: "Raoul_c_01", name: "Raoul", title: "Loguetown", rank: "C", power: 18, attackRange: [3, 9], health: 56, type: "Support", ability: null, image: "https://files.catbox.moe/8e00cb.webp" },
+  { id: "DaddyMasterson_c_01", name: "Daddy Masterson", title: "Loguetown", rank: "C", power: 22, attackRange: [5, 12], health: 65, type: "Attack", ability: null, image: "https://files.catbox.moe/igezg8.webp" },
+  { id: "Carol_c_01", name: "Carol", title: "Loguetown", rank: "C", power: 14, attackRange: [2, 7], health: 48, type: "Support", ability: null, image: "https://files.catbox.moe/nqsc0t.webp" },
+  { id: "Ecolli_c_01", name: "Ecolli", title: "Loguetown", rank: "C", power: 13, attackRange: [2, 6], health: 46, type: "Support", ability: null, image: "https://files.catbox.moe/rtnmj6.webp" },
+  { id: "Dias_c_01", name: "Dias", title: "Loguetown", rank: "C", power: 15, attackRange: [2, 7], health: 50, type: "Support", ability: null, image: "https://files.catbox.moe/1guoiz.webp" },
+  // NAGAGUTSUS KINGDOM (all title: "Nagagutsus Kingdom")
+  { id: "Furrari_c_01", name: "Furrari", title: "Nagagutsus Kingdom", rank: "C", power: 17, attackRange: [3, 8], health: 53, type: "Support", ability: null, image: "https://files.catbox.moe/9x5js0.webp" },
+  { id: "Tritobu_c_01", name: "Tritobu", title: "Nagagutsus Kingdom", rank: "C", power: 16, attackRange: [3, 7], health: 50, type: "Support", ability: null, image: "https://files.catbox.moe/azvnyr.webp" },
+  { id: "NyornyoNyarmani_c_01", name: "Nyornyo Nyarmani", title: "Nagagutsus Kingdom", rank: "C", power: 18, attackRange: [4, 9], health: 55, type: "Support", ability: null, image: "https://files.catbox.moe/udiphx.webp" },
+  // OCEAN'S NAVEL (all title: "Ocean's Navel")
+  { id: "Hamu_c_01", name: "Hamu", title: "Ocean's Navel", rank: "C", power: 15, attackRange: [2, 7], health: 48, type: "Support", ability: null, image: "https://files.catbox.moe/b0iri3.webp" },
+  { id: "Meroie_c_01", name: "Meroie", title: "Ocean's Navel", rank: "C", power: 16, attackRange: [3, 8], health: 52, type: "Support", ability: null, image: "https://files.catbox.moe/8va4m8.webp" },
+  { id: "joke_b_01", name: "Joke", title: "Ocean's Navel", rank: "B", power: 40, attackRange: [8, 18], health: 100, type: "Support", ability: null, image: "https://files.catbox.moe/9ann7a.webp" },
+  // WARSHIP ISLAND (all title: "Warship Island")
+  { id: "Apis_c_01", name: "Apis", title: "Warship Island", rank: "C", power: 14, attackRange: [2, 6], health: 45, type: "Support", ability: null, image: "https://files.catbox.moe/rlfe5e.webp" },
+  { id: "Boukuden_c_01", name: "Boukuden", title: "Warship Island", rank: "C", power: 16, attackRange: [3, 8], health: 52, type: "Support", ability: null, image: "https://files.catbox.moe/vqdxro.webp" },
+  { id: "Ryu_c_01", name: "Ryu", title: "Warship Island", rank: "C", power: 20, attackRange: [4, 10], health: 60, type: "Support", ability: null, image: "https://files.catbox.moe/ozwyg0.webp" },
+  // CLOCKWORK ISLAND (all title: "Clockwork Island")
+  { id: "akisu_c_01", name: "Akisu", title: "Clockwork Island", rank: "C", power: 15, attackRange: [2, 7], health: 48, type: "Support", ability: null, image: "https://files.catbox.moe/pmtidm.webp" },
+  // NAZAWAKA CITY
+  { id: "UmenoNazawaka_c_01", name: "Umeno Nazawaka", title: "Nazawaka City", rank: "C", power: 16, attackRange: [3, 8], health: 52, type: "Support", ability: null, image: "https://files.catbox.moe/4sr12w.webp" },
+  { id: "Tsubaki_c_01", name: "Tsubaki", title: "Nazawaka City", rank: "C", power: 15, attackRange: [2, 7], health: 50, type: "Support", ability: null, image: "https://files.catbox.moe/6dfnvy.webp" },
+  { id: "TaketoNazawa_c_01", name: "Taketo Nazawa", title: "Nazawaka City", rank: "C", power: 17, attackRange: [3, 8], health: 54, type: "Support", ability: null, image: "https://files.catbox.moe/0abs6d.webp" },
+  // MR. 2 BON KUREI
+  { id: "Mr2BonKurei_a_01", name: "Mr. 2 Bon Kurei", title: "Baroque Works Officer", rank: "A", power: 120, attackRange: [20, 40], health: 180, type: "Attack", ability: null, image: "https://files.catbox.moe/ug0cer.webp", evolutions: ["Mr2BonKurei_a_02"] },
+  { id: "Mr2BonKurei_a_02", name: "Mr. 2 Bon Kurei", title: "Bentham of the Wild", rank: "A", power: 140, attackRange: [25, 45], health: 200, type: "Attack", ability: null, image: "https://files.catbox.moe/0a4ygw.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 10000, minLevel: 25 } },
+  // RANDOM EAST BLUE NATIVES (all title: "Random East Blue natives")
+  { id: "Pinky_c_01", name: "Pinky", title: "Random East Blue natives", rank: "C", power: 13, attackRange: [2, 6], health: 45, type: "Support", ability: null, image: "https://files.catbox.moe/8jh09g.webp" },
+  { id: "Moodie_c_01", name: "Moodie", title: "Random East Blue natives", rank: "C", power: 14, attackRange: [2, 7], health: 48, type: "Support", ability: null, image: "https://files.catbox.moe/37r74m.webp" },
+  { id: "Motzel_c_01", name: "Motzel", title: "Random East Blue natives", rank: "C", power: 15, attackRange: [3, 8], health: 50, type: "Support", ability: null, image: "https://files.catbox.moe/s7290k.webp" },
+  { id: "Batchee_c_01", name: "Batchee", title: "Random East Blue natives", rank: "C", power: 12, attackRange: [2, 6], health: 44, type: "Support", ability: null, image: "https://files.catbox.moe/xeysup.webp" },
+  { id: "anjo_c_01", name: "Anjo", title: "Random East Blue natives", rank: "C", power: 13, attackRange: [2, 6], health: 45, type: "Support", ability: null, image: "https://files.catbox.moe/vcelyw.webp" },
+  { id: "MissCatherina_c_01", name: "Miss Catherina", title: "Random East Blue natives", rank: "C", power: 14, attackRange: [2, 7], health: 48, type: "Support", ability: null, image: "https://files.catbox.moe/k7vjnd.webp" },
+  { id: "KumateTribe_c_01", name: "Kumate Tribe", title: "Random East Blue natives", rank: "C", power: 16, attackRange: [3, 8], health: 52, type: "Support", ability: null, image: "https://files.catbox.moe/piev4m.webp" },
+  { id: "BanDedessinee_c_01", name: "Ban Dedessinee", title: "Random East Blue natives", rank: "C", power: 15, attackRange: [3, 8], health: 50, type: "Support", ability: null, image: "https://files.catbox.moe/eqculz.webp" },
+  { id: "Herring_c_01", name: "Herring", title: "Random East Blue natives", rank: "C", power: 13, attackRange: [2, 6], health: 45, type: "Support", ability: null, image: "https://files.catbox.moe/ew3c3j.webp" },
+  { id: "Medaka_c_01", name: "Medaka", title: "Random East Blue natives", rank: "C", power: 12, attackRange: [2, 6], health: 44, type: "Support", ability: null, image: "https://files.catbox.moe/kl7o2j.webp" },
+  { id: "Skid_c_01", name: "Skid", title: "Random East Blue natives", rank: "C", power: 14, attackRange: [2, 7], health: 48, type: "Support", ability: null, image: "https://files.catbox.moe/owxcy9.webp" },
+  { id: "Ganzo_c_01", name: "Ganzo", title: "Random East Blue natives", rank: "C", power: 15, attackRange: [3, 8], health: 50, type: "Support", ability: null, image: "https://files.catbox.moe/dg0jv3.webp" },
+  { id: "Tobio_c_01", name: "Tobio", title: "Random East Blue natives", rank: "C", power: 13, attackRange: [2, 6], health: 45, type: "Support", ability: null, image: "https://files.catbox.moe/lyyew6.webp" },
+  { id: "Carmen_c_01", name: "Carmen", title: "Random East Blue natives", rank: "C", power: 14, attackRange: [2, 7], health: 48, type: "Support", ability: null, image: "https://files.catbox.moe/foj0y4.webp" },
+  { id: "Leo_c_01", name: "Leo", title: "Random East Blue natives", rank: "C", power: 15, attackRange: [3, 8], health: 50, type: "Support", ability: null, image: "https://files.catbox.moe/5fmoax.webp" },
+  { id: "Jose_c_01", name: "Jose", title: "Random East Blue natives", rank: "C", power: 13, attackRange: [2, 6], health: 45, type: "Support", ability: null, image: "https://files.catbox.moe/582qx3.webp" },
+  { id: "Shutai_c_01", name: "Shutai", title: "Random East Blue natives", rank: "C", power: 14, attackRange: [2, 7], health: 48, type: "Support", ability: null, image: "https://files.catbox.moe/cmyobd.webp" },
+  { id: "Eric_c_01", name: "Eric", title: "Random East Blue natives", rank: "C", power: 15, attackRange: [3, 8], health: 50, type: "Support", ability: null, image: "https://files.catbox.moe/9v0idi.webp" },
+  { id: "Borodo_c_01", name: "Borodo", title: "Random East Blue natives", rank: "C", power: 16, attackRange: [3, 8], health: 52, type: "Support", ability: null, image: "https://files.catbox.moe/m2h76h.webp" },
+  { id: "Harry_c_01", name: "Harry", title: "Random East Blue natives", rank: "C", power: 13, attackRange: [2, 6], health: 45, type: "Support", ability: null, image: "https://files.catbox.moe/sv7s87.webp" },
+  { id: "Fabre_c_01", name: "Fabre", title: "Random East Blue natives", rank: "C", power: 14, attackRange: [2, 7], health: 48, type: "Support", ability: null, image: "https://files.catbox.moe/i21qk2.webp" },
+  { id: "Mendo_c_01", name: "Mendo", title: "Random East Blue natives", rank: "C", power: 15, attackRange: [3, 8], health: 50, type: "Support", ability: null, image: "https://files.catbox.moe/pchnxa.webp" },
+  { id: "Mitsuboshi_c_01", name: "Mitsuboshi", title: "Random East Blue natives", rank: "C", power: 16, attackRange: [3, 8], health: 52, type: "Support", ability: null, image: "https://files.catbox.moe/qi0avj.webp" },
+  { id: "soran_c_01", name: "Soran", title: "Random East Blue natives", rank: "C", power: 14, attackRange: [2, 7], health: 48, type: "Support", ability: null, image: "https://files.catbox.moe/m6ja5b.webp" },
+  { id: "Monday_c_01", name: "Monday", title: "Random East Blue natives", rank: "C", power: 13, attackRange: [2, 6], health: 45, type: "Support", ability: null, image: "https://files.catbox.moe/ipv0tl.webp" },
+  { id: "Usodabird_c_01", name: "Usodabird", title: "Random East Blue natives", rank: "C", power: 12, attackRange: [2, 6], health: 44, type: "Support", ability: null, image: "https://files.catbox.moe/snxuyu.webp" },
+  { id: "carina_c_01", name: "Carina", title: "Random East Blue natives", rank: "C", power: 15, attackRange: [3, 8], health: 50, type: "Support", ability: null, image: "https://files.catbox.moe/v7oxwg.webp" },
+  { id: "Savarin_c_01", name: "Savarin", title: "Random East Blue natives", rank: "C", power: 16, attackRange: [3, 8], health: 52, type: "Support", ability: null, image: "https://files.catbox.moe/ynke9i.webp" },
+  { id: "Ruibe_c_01", name: "Ruibe", title: "Random East Blue natives", rank: "C", power: 14, attackRange: [2, 7], health: 48, type: "Support", ability: null, image: "https://files.catbox.moe/j9pefs.webp" },
+  { id: "JodieAndEliza_c_01", name: "Jodie and Eliza", title: "Random East Blue natives", rank: "C", power: 15, attackRange: [3, 8], health: 50, type: "Support", ability: null, image: "https://files.catbox.moe/huyiqh.webp" },
+  { id: "BlueDia_c_01", name: "Blue Dia", title: "Random East Blue natives", rank: "C", power: 13, attackRange: [2, 6], health: 45, type: "Support", ability: null, image: "https://files.catbox.moe/gka81d.webp" },
+  { id: "Meshi_c_01", name: "Meshi", title: "Random East Blue natives", rank: "C", power: 15, attackRange: [3, 8], health: 50, type: "Support", ability: null, image: "https://files.catbox.moe/aiwmz4.webp" },
+  { id: "Wier_c_01", name: "Wier", title: "Random East Blue natives", rank: "C", power: 14, attackRange: [2, 7], health: 48, type: "Support", ability: null, image: "https://files.catbox.moe/h8h05v.webp" },
+
+  // --- NEW ADDITIONS SUBMITTED BY USER ---
+  // Jango
+  { id: "Jango_b_01", name: "Jango", title: "One, Two Jango!", rank: "B", power: 60, attackRange: [12, 22], health: 120, type: "Attack", ability: null, image: "https://files.catbox.moe/xev14p.webp", evolutions: ["Jango_a_02"] },
+  { id: "Jango_a_02", name: "Jango", title: "The Turncoat", rank: "A", power: 130, attackRange: [24, 44], health: 210, type: "Attack", ability: null, image: "https://files.catbox.moe/f6y3ai.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 4500, minLevel: 25 } },
+
+  // Fullbody
+  { id: "Fullbody_c_01", name: "Fullbody", title: "Marine Seasman recruit", rank: "C", power: 18, attackRange: [3, 9], health: 60, type: "Support", ability: null, image: "https://files.catbox.moe/3b115v.webp", evolutions: ["Fullbody_c_02"] },
+  { id: "Fullbody_c_02", name: "Fullbody", title: "Marine Lieutenant mmander", rank: "C", power: 32, attackRange: [7, 18], health: 95, type: "Support", ability: null, image: "https://files.catbox.moe/nrdja5.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 1200, minLevel: 12 } },
+
+  // Nezumi
+  { id: "nezumi_c_01", name: "Nezumi", title: "Marine Captain", rank: "C", power: 24, attackRange: [5, 12], health: 80, type: "Attack", ability: null, image: "https://files.catbox.moe/xgthf1.webp" },
+
+  // Kaku
+  { id: "Kaku_a_01", name: "Kaku", title: "CP9 Agent", rank: "A", power: 140, attackRange: [24, 44], health: 200, type: "Attack", ability: null, image: "https://files.catbox.moe/ooz77p.webp", evolutions: ["Kaku_s_02"] },
+  { id: "Kaku_s_02", name: "Kaku", title: "CP0 Agent", rank: "S", power: 340, attackRange: [50, 90], health: 330, type: "Attack", specialAttack: { name: "Lightning Jab", range: [120, 160] }, ability: null, image: "https://files.catbox.moe/8s8spk.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 9000, minLevel: 35 } },
+
+  // TITLE: Marine/World Government
+  { id: "Lines_c_01", name: "Lines", title: "Marine/World Government", rank: "C", power: 20, attackRange: [4, 10], health: 60, type: "Support", ability: null, image: "https://files.catbox.moe/nyl2u5.webp" },
+  { id: "PuddingPudding_b_01", name: "PuddingPudding", title: "Marine/World Government", rank: "B", power: 55, attackRange: [10, 22], health: 120, type: "Support", ability: null, image: "https://files.catbox.moe/yvl0nd.webp" },
+  { id: "NelsonRoyale_c_01", name: "Nelson Royale", title: "Marine/World Government", rank: "C", power: 22, attackRange: [4, 11], health: 68, type: "Support", ability: null, image: "https://files.catbox.moe/y8soz3.webp" },
+  { id: "Hardy_c_01", name: "Hardy", title: "Marine/World Government", rank: "C", power: 18, attackRange: [3, 9], health: 64, type: "Support", ability: null, image: "https://files.catbox.moe/o1rgs3.webp" },
+
+  // Benn Beckman
+  { id: "BennBeckman_s_01", name: "Benn Beckman", title: "First mate of the Red-Haired Pirates", rank: "S", power: 360, attackRange: [55, 95], health: 340, type: "Attack", specialAttack: { name: "Sniper's Judgement", range: [130, 170] }, ability: null, image: "https://files.catbox.moe/enzndt.jpg", evolutions: ["BennBeckman_ss_02"] },
+  { id: "BennBeckman_ss_02", name: "Benn Beckman", title: "First mate of the Red-Haired Pirates", rank: "SS", power: 520, attackRange: [90, 140], health: 480, type: "Attack", specialAttack: { name: "Sniper's Judgement (Enhanced)", range: [180, 220] }, ability: null, image: "https://files.catbox.moe/wm3uk6.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 32000, minLevel: 60 } },
+
+  // Yassop
+  { id: "Yassop_a_01", name: "Yassop", title: "Sniper of the Red-Haired Pirates", rank: "A", power: 130, attackRange: [22, 40], health: 190, type: "Attack", ability: null, image: "https://files.catbox.moe/qa4nf9.webp", evolutions: ["Yassop_a_02"] },
+  { id: "Yassop_a_02", name: "Yassop", title: "Sniper of the Red-Haired Pirates", rank: "A", power: 150, attackRange: [26, 48], health: 220, type: "Attack", ability: null, image: "https://files.catbox.moe/vzt741.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 4500, minLevel: 25 } },
+
+  // Lucky Roux
+  { id: "LuckyRoux_a_01", name: "Lucky Roux", title: "Cook of the Red-Haired Pirates", rank: "A", power: 120, attackRange: [20, 40], health: 190, type: "Support", ability: null, image: "https://files.catbox.moe/fxavyy.webp", evolutions: ["LuckyRoux_s_02"] },
+  { id: "LuckyRoux_s_02", name: "Lucky Roux", title: "Cook of the Red-Haired Pirates", rank: "S", power: 300, attackRange: [40, 80], health: 320, type: "Support", ability: null, image: "https://files.catbox.moe/1sy5sj.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 9000, minLevel: 35 } },
+
+  // Shanks family
+  { id: "Shanks_c_01", name: "Shanks", title: "kid Shanks ", rank: "C", power: 26, attackRange: [5, 14], health: 78, type: "Attack", ability: null, image: "https://files.catbox.moe/gf5475.webp", evolutions: ["Shank_a_02"] },
+  { id: "Shank_a_02", name: "Shanks", title: "\"Red Haired\"", rank: "A", power: 160, attackRange: [26, 44], health: 210, type: "Attack", ability: null, image: "https://files.catbox.moe/2lqama.jpg", evolutions: ["Shanks_ss_03"], isUpgrade: true, upgradeRequirements: { cost: 4500, minLevel: 25 } },
+  { id: "Shanks_ss_03", name: "Shanks", title: "Captain of the Red-Haired pirates", rank: "SS", power: 620, attackRange: [110, 160], health: 540, type: "Attack", specialAttack: { name: "Haoshoku Impact", range: [200, 260] }, ability: null, image: "https://files.catbox.moe/v1xyfc.jpg", evolutions: ["Shanks_ur_04"], isUpgrade: true, upgradeRequirements: { cost: 50000, minLevel: 75 } },
+  { id: "Shanks_ur_04", name: "Shanks", title: "Captain of the Red-Haired pirates", rank: "UR", power: 1100, attackRange: [170, 230], health: 820, type: "Attack", specialAttack: { name: "Conqueror's Roar", range: [260, 320] }, ability: null, image: "https://files.catbox.moe/tj9er0.jpg", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 150000, minLevel: 100 } },
+
+  // Red-Haired crewmembers
+  { id: "Limejuice_b_01", name: "Limejuice", title: "Crewmember of the Red-Haired pirates", rank: "B", power: 46, attackRange: [10, 20], health: 110, type: "Support", ability: null, image: "https://files.catbox.moe/675pen.webp", evolutions: ["Limejuice_a_02"] },
+  { id: "Limejuice_a_02", name: "Limejuice", title: "Crewmember of the Red-Haired pirates", rank: "A", power: 118, attackRange: [22, 40], health: 190, type: "Support", ability: null, image: "https://files.catbox.moe/90xhvw.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 4500, minLevel: 25 } },
+
+  { id: "Bonkpunch_b_01", name: "Bonkpunch", title: "Crewmember of the Red-Hiared pirates ", rank: "B", power: 45, attackRange: [10, 20], health: 108, type: "Attack", ability: null, image: "https://files.catbox.moe/5rcz7e.webp", evolutions: ["Bonkpunch_a_02"] },
+  { id: "Bonkpunch_a_02", name: "Bonkpunch", title: "Crewmember of the Red-Haired pirates", rank: "A", power: 115, attackRange: [22, 40], health: 185, type: "Attack", ability: null, image: "https://files.catbox.moe/48yjj8.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 4500, minLevel: 25 } },
+
+  { id: "Monster_c_01", name: "Monster", title: "Crewmember of the Red-Haired pirates", rank: "C", power: 20, attackRange: [4, 12], health: 72, type: "Support", ability: null, image: "https://files.catbox.moe/48yjj8.webp", evolutions: ["Monster_c_02"] },
+  { id: "Monster_c_02", name: "Monster", title: "Crewmember of the Red-Haired Pirates ", rank: "C", power: 36, attackRange: [8, 18], health: 98, type: "Support", ability: null, image: "https://files.catbox.moe/wl2pbs.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 1200, minLevel: 12 } },
+
+  { id: "BuildingSnake_b_01", name: "Building Snake", title: "Crewmember of the Red-Haired pirates", rank: "B", power: 48, attackRange: [10, 22], health: 115, type: "Attack", ability: null, image: "https://files.catbox.moe/uh1fsg.webp", evolutions: ["BuildingSnake_a_02"] },
+  { id: "BuildingSnake_a_02", name: "Building Snake", title: "Crewmember of the Red-Haired pirates", rank: "A", power: 125, attackRange: [24, 44], health: 200, type: "Attack", ability: null, image: "https://files.catbox.moe/l102jm.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 4500, minLevel: 25 } },
+
+  { id: "hongo_b_01", name: "Hongo", title: "Crewmember of the Red-Haired Pirates", rank: "B", power: 44, attackRange: [9, 20], health: 110, type: "Support", ability: null, image: "https://files.catbox.moe/grzuyt.webp", evolutions: ["Hongo_a_02"] },
+  { id: "Hongo_a_02", name: "Hongo", title: "Crewmember of the Red-Haired Pirates", rank: "A", power: 118, attackRange: [22, 40], health: 188, type: "Support", ability: null, image: "https://files.catbox.moe/lko5b2.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 4500, minLevel: 25 } },
+
+  { id: "Gab_b_01", name: "Gab", title: "Crewmember of the Red-Haired Pirates", rank: "B", power: 42, attackRange: [9, 19], health: 108, type: "Support", ability: null, image: "https://files.catbox.moe/1lpgg8.webp", evolutions: ["Gab_a_02"] },
+  { id: "Gab_a_02", name: "Gab", title: "Crewmember of the red-Haired Pirates", rank: "A", power: 116, attackRange: [22, 40], health: 185, type: "Support", ability: null, image: "https://files.catbox.moe/go4mls.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 4500, minLevel: 25 } },
+
+  // Uta
+  { id: "Uta_c_01", name: "Uta", title: "Kid Uta", rank: "C", power: 20, attackRange: [4, 10], health: 70, type: "Support", ability: null, image: "https://files.catbox.moe/zfk7o8.webp", evolutions: ["Uta_a_02"] },
+  { id: "Uta_a_02", name: "Uta", title: "World Famous Diva", rank: "A", power: 140, attackRange: [24, 44], health: 210, type: "Support", ability: null, image: "https://files.catbox.moe/ad5oxn.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 4500, minLevel: 25 } },
+
+  // BlueJam
+  { id: "BlueJam_b_01", name: "BlueJam", title: "Captain of the Bluejam Pirates", rank: "B", power: 58, attackRange: [12, 24], health: 130, type: "Attack", ability: null, image: "https://files.catbox.moe/8th540.webp" },
+
+  // Porchemy
+  { id: "Porchemy_c_01", name: "Porchemy", title: "Member of the Bluejam pirates", rank: "C", power: 18, attackRange: [3, 9], health: 64, type: "Support", ability: null, image: "https://files.catbox.moe/6ljbcb.webp" },
+
+  // Alvida
+  { id: "Alvida_c_01", name: "Alvida", title: "Captain of the Alvida pirates", rank: "C", power: 32, attackRange: [7, 16], health: 95, type: "Attack", ability: null, image: "https://files.catbox.moe/ozkqj1.webp", evolutions: ["Alvida_a_02"] },
+  { id: "Alvida_a_02", name: "Alvida", title: "Captain of the Alvida pirates", rank: "A", power: 130, attackRange: [24, 44], health: 200, type: "Attack", ability: null, image: "https://files.catbox.moe/aultot.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 4500, minLevel: 25 } },
+
+  // TITLE: Member of the Alvida pirates
+  { id: "heppoko_c_01", name: "heppoko", title: "Member of the Alvida pirates", rank: "C", power: 16, attackRange: [3, 8], health: 52, type: "Support", ability: null, image: "https://files.catbox.moe/1d4s4j.webp" },
+  { id: "Peppoko_c_01", name: "Peppoko", title: "Member of the Alvida pirates", rank: "C", power: 17, attackRange: [3, 9], health: 54, type: "Support", ability: null, image: "https://files.catbox.moe/jn26qf.webp" },
+  { id: "Poppoko_c_01", name: "Poppoko", title: "Member of the Alvida pirates", rank: "C", power: 18, attackRange: [3, 9], health: 56, type: "Support", ability: null, image: "https://files.catbox.moe/jlzfri.webp" },
+
+  // Buggy progression
+  { id: "Buggy_c_01", name: "Buggy", title: "Kid Buggy", rank: "C", power: 28, attackRange: [6, 14], health: 80, type: "Attack", ability: null, image: "https://files.catbox.moe/yjlfpt.webp", evolutions: ["Buggy_b_02"] },
+  { id: "Buggy_b_02", name: "Buggy", title: "Captain of the Buggy pirates", rank: "B", power: 85, attackRange: [18, 36], health: 160, type: "Attack", ability: null, image: "https://files.catbox.moe/jlmnal.webp", evolutions: ["Buggy_a_03"], isUpgrade: true, upgradeRequirements: { cost: 1800, minLevel: 15 } },
+  { id: "Buggy_a_03", name: "Buggy", title: "Marineford war", rank: "A", power: 160, attackRange: [28, 48], health: 230, type: "Attack", ability: null, image: "https://files.catbox.moe/s3r71j.webp", evolutions: ["Buggy_s_04"], isUpgrade: true, upgradeRequirements: { cost: 4500, minLevel: 28 } },
+  { id: "Buggy_s_04", name: "Buggy", title: "Emperor of the New Era, nominal president of Cross Guild", rank: "S", power: 420, attackRange: [60, 100], health: 360, type: "Attack", specialAttack: { name: "Cursed Chop", range: [140, 190] }, ability: null, image: "https://files.catbox.moe/ncsz9e.jpg", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 9000, minLevel: 40 } },
+
+  // TITLE: Member of the Buggy pirates
+  { id: "mohji_b_01", name: "mohji", title: "Member of the Buggy pirates", rank: "B", power: 44, attackRange: [9, 19], health: 110, type: "Support", ability: null, image: "https://files.catbox.moe/tmzqwm.webp" },
+  { id: "mohji_c_02", name: "mohji", title: "Member of the Buggy pirates", rank: "C", power: 20, attackRange: [4, 12], health: 72, type: "Support", ability: null, image: "https://files.catbox.moe/khoesd.webp" },
+  { id: "Richie_b_01", name: "Richie", title: "Member of the Buggy pirates", rank: "B", power: 48, attackRange: [10, 22], health: 118, type: "Attack", ability: null, image: "https://files.catbox.moe/q8yru9.webp" },
+  { id: "Richie_c_02", name: "Richie", title: "Member of the Buggy pirates", rank: "C", power: 20, attackRange: [4, 12], health: 72, type: "Attack", ability: null, image: "https://files.catbox.moe/k1gdg7.webp" },
+  { id: "cabaji_b_01", name: "cabaji", title: "Member of the Buggy pirates", rank: "B", power: 46, attackRange: [9, 20], health: 110, type: "Attack", ability: null, image: "https://files.catbox.moe/a7os02.webp" },
+  { id: "cabaji_b_02", name: "cabaji", title: "Member of the Buggy pirates", rank: "B", power: 47, attackRange: [9, 21], health: 112, type: "Attack", ability: null, image: "https://files.catbox.moe/chufol.webp" },
+  { id: "TighttropeWalkingFunanBros_c_01", name: "Tighttrope Walking Funan Bros", title: "Member of the Buggy pirates", rank: "C", power: 18, attackRange: [3, 9], health: 64, type: "Support", ability: null, image: "https://files.catbox.moe/1ez338.webp" },
+  { id: "SuperhumanDomingos_c_01", name: "Superhuman Domingos", title: "Member of the Buggy pirates", rank: "C", power: 19, attackRange: [3, 9], health: 68, type: "Attack", ability: null, image: "https://files.catbox.moe/ckavv9.webp" },
+  { id: "AcrobaticFuwas_c_01", name: "Acrobatic Fuwas", title: "Member of the Buggy pirates", rank: "C", power: 18, attackRange: [3, 9], health: 64, type: "Support", ability: null, image: "https://files.catbox.moe/ugr2s9.webp" },
+
+  // TITLE: Member of the Black Cat pirates
+  { id: "Sham_b_01", name: "Sham", title: "Member of the Black Cat pirates", rank: "B", power: 44, attackRange: [9, 19], health: 110, type: "Support", ability: null, image: "https://files.catbox.moe/nxlqwg.webp" },
+  { id: "Buchi_b_01", name: "Buchi", title: "Member of the Black Cat pirates", rank: "B", power: 46, attackRange: [9, 21], health: 115, type: "Support", ability: null, image: "https://files.catbox.moe/bcdyjk.webp" },
+  { id: "NugireYainu_c_01", name: "Nugire Yainu", title: "Member of the Black Cat pirates", rank: "C", power: 20, attackRange: [4, 12], health: 72, type: "Support", ability: null, image: "https://files.catbox.moe/7eh9kd.webp" },
+
+  // Don Krieg / Krieg pirates
+  { id: "Donkrieg_a_01", name: "Don Krieg", title: "Captain of the Krieg pirates", rank: "A", power: 150, attackRange: [26, 46], health: 210, type: "Attack", ability: null, image: "https://files.catbox.moe/rv9o5q.webp", evolutions: ["Donkrieg_a_02"] },
+  { id: "Donkrieg_a_02", name: "Don Krieg", title: "Captain of the Krieg pirates", rank: "A", power: 170, attackRange: [30, 50], health: 230, type: "Attack", ability: null, image: "https://files.catbox.moe/aptqgd.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 4500, minLevel: 28 } },
+  { id: "Gin_b_01", name: "Gin", title: "Commander of the Krieg pirates", rank: "B", power: 44, attackRange: [9, 19], health: 110, type: "Support", ability: null, image: "https://files.catbox.moe/7aru82.webp", evolutions: ["Gin_b_02"] },
+  { id: "Gin_b_02", name: "Gin", title: "Commander of the Krieg pirates", rank: "B", power: 52, attackRange: [11, 22], health: 125, type: "Support", ability: null, image: "https://files.catbox.moe/bckevs.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 1800, minLevel: 15 } },
+
+  { id: "Pearl_b_01", name: "Pearl", title: "Commander of the Kireg pirates", rank: "B", power: 46, attackRange: [9, 21], health: 115, type: "Support", ability: null, image: "https://files.catbox.moe/49nuo9.webp" },
+  { id: "Pearl_b_02", name: "Pearl", title: "Commander of the Krieg pirates", rank: "B", power: 50, attackRange: [10, 22], health: 122, type: "Support", ability: null, image: "https://files.catbox.moe/v4bjgk.webp" },
+
+  // TITLE: Member of the Krieg Pirates
+  { id: "hustle_c_01", name: "hustle", title: "Member of the Krieg Pirates", rank: "C", power: 18, attackRange: [3, 9], health: 64, type: "Support", ability: null, image: "https://files.catbox.moe/fb8dwk.webp" },
+  { id: "Ideaman_c_01", name: "Ideaman", title: "Member of the Krieg Pirates", rank: "C", power: 19, attackRange: [3, 9], health: 68, type: "Support", ability: null, image: "https://files.catbox.moe/7cu96e.webp" },
+  { id: "Kagikko_c_01", name: "Kagikko", title: "Member of the Krieg Pirates", rank: "C", power: 17, attackRange: [3, 8], health: 62, type: "Support", ability: null, image: "https://files.catbox.moe/8jxn1a.webp" },
+
+  // Arlong
+  { id: "Arlong_b_01", name: "Arlong", title: "member of the Sun pirates", rank: "B", power: 48, attackRange: [10, 22], health: 118, type: "Attack", ability: null, image: "https://files.catbox.moe/e2chf2.webp", evolutions: ["Arlong_a_02"] },
+  { id: "Arlong_a_02", name: "Arlong", title: "Captain of the Arlong pirates", rank: "A", power: 140, attackRange: [26, 46], health: 220, type: "Attack", ability: null, image: "https://files.catbox.moe/si9a7u.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 4500, minLevel: 28 } },
+
+  { id: "Hatchan_c_01", name: "Hatchan", title: "kid Hatchan ", rank: "C", power: 20, attackRange: [4, 12], health: 72, type: "Support", ability: null, image: "https://files.catbox.moe/1t7w93.webp", evolutions: ["Hatchan_b_02"] },
+  { id: "Hatchan_b_02", name: "Hatchan", title: "member of the Arlong pirates", rank: "B", power: 44, attackRange: [9, 19], health: 110, type: "Support", ability: null, image: "https://files.catbox.moe/g0z1xz.webp", evolutions: ["Hatchan_b_03"] },
+  { id: "Hatchan_b_03", name: "Hatchan", title: "Takoyaki seller", rank: "B", power: 56, attackRange: [11, 22], health: 130, type: "Support", ability: null, image: "https://files.catbox.moe/e1n1h2.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 1800, minLevel: 15 } },
+
+  // TITLE: Member of the Arlong pirates
+  { id: "Chew_b_01", name: "Chew", title: "Member of the Arlong pirates", rank: "B", power: 45, attackRange: [9, 20], health: 112, type: "Support", ability: null, image: "https://files.catbox.moe/0u3ssd.webp" },
+  { id: "Kuroobi_b_01", name: "Kuroobi", title: "Member of the Arlong pirates", rank: "B", power: 46, attackRange: [9, 21], health: 115, type: "Attack", ability: null, image: "https://files.catbox.moe/rp1jta.webp" },
+  { id: "Pisaro_c_01", name: "Pisaro", title: "Member of the Arlong pirates", rank: "C", power: 18, attackRange: [3, 9], health: 64, type: "Support", ability: null, image: "https://files.catbox.moe/jlsmlh.webp" },
+  { id: "Kaneshiro_c_01", name: "Kaneshiro", title: "Member of the Arlong pirates", rank: "C", power: 20, attackRange: [4, 12], health: 72, type: "Support", ability: null, image: "https://files.catbox.moe/yyik54.webp" },
+  { id: "Take_c_01", name: "Take", title: "Member of the Arlong pirates", rank: "C", power: 17, attackRange: [3, 8], health: 60, type: "Support", ability: null, image: "https://files.catbox.moe/o8kwaz.webp" },
+  { id: "Shioyaki_c_01", name: "Shioyaki", title: "Member of the Arlong pirates", rank: "C", power: 16, attackRange: [3, 8], health: 58, type: "Support", ability: null, image: "https://files.catbox.moe/lpkd6r.webp" },
+  { id: "Momoo_b_01", name: "Momoo", title: "Member of the Arlong pirates", rank: "B", power: 42, attackRange: [9, 19], health: 108, type: "Support", ability: null, image: "https://files.catbox.moe/bdyxda.webp" },
+
+  // Misc members
+  { id: "Koze_c_01", name: "Koze", title: "Member of the Yes pirates", rank: "C", power: 18, attackRange: [3, 9], health: 64, type: "Support", ability: null, image: "https://files.catbox.moe/obtxm2.webp" },
+  { id: "SpeedJiru_b_01", name: "Speed Jiru", title: "Member of the Whitebeard pirates", rank: "B", power: 46, attackRange: [9, 21], health: 115, type: "Support", ability: null, image: "https://files.catbox.moe/f6wueo.webp" },
+  { id: "MaskedDeuce_b_01", name: "Masked Deuce", title: "Member of the spade Pirates", rank: "B", power: 44, attackRange: [9, 19], health: 110, type: "Support", ability: null, image: "https://files.catbox.moe/1hczb3.webp" },
+  { id: "MaskedDeuce_b_02", name: "Masked Deuce", title: "Member of the whitebeard pirates", rank: "B", power: 48, attackRange: [10, 22], health: 120, type: "Support", ability: null, image: "https://files.catbox.moe/ucw065.webp" },
+
+  // Van Augur
+  { id: "VanAugur_a_01", name: "Van Augur", title: "Sniper of the Blackbeard pirates", rank: "A", power: 130, attackRange: [22, 40], health: 190, type: "Attack", ability: null, image: "https://files.catbox.moe/rxkcab.webp", evolutions: ["VanAugur_a_02"] },
+  { id: "VanAugur_a_02", name: "Van Augur", title: "Sniper of the Blackbeard pirates", rank: "A", power: 150, attackRange: [26, 48], health: 220, type: "Attack", ability: null, image: "https://files.catbox.moe/kdrhjh.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 4500, minLevel: 25 } },
+
+  // TITLE: Member of the Fake Straw Hat crew
+  { id: "DemaloBlack_c_01", name: "Demalo Black", title: "Member of the Fake Straw Hat crew", rank: "C", power: 18, attackRange: [3, 9], health: 64, type: "Support", ability: null, image: "https://files.catbox.moe/5t0r33.webp" },
+  { id: "Manjaro_c_01", name: "Manjaro", title: "Member of the Fake Straw Hat crew", rank: "C", power: 17, attackRange: [3, 8], health: 62, type: "Support", ability: null, image: "https://files.catbox.moe/reowkv.webp" },
+  { id: "Chocolat_c_01", name: "Chocolat", title: "Member of the Fake Straw Hat crew", rank: "C", power: 18, attackRange: [3, 9], health: 66, type: "Support", ability: null, image: "https://files.catbox.moe/u6z2fx.webp" },
+  { id: "Mounblutain_c_01", name: "Mounblutain", title: "Member of the Fake Straw Hat crew", rank: "C", power: 19, attackRange: [3, 9], health: 68, type: "Support", ability: null, image: "https://files.catbox.moe/vxw793.webp" },
+  { id: "Drip_c_01", name: "Drip", title: "Member of the Fake Straw Hat crew", rank: "C", power: 18, attackRange: [3, 9], health: 66, type: "Support", ability: null, image: "https://files.catbox.moe/xt1m5x.webp" },
+  { id: "NoraGitsune_c_01", name: "Nora Gitsune", title: "Member of the Fake Straw Hat crew", rank: "C", power: 18, attackRange: [3, 9], health: 66, type: "Support", ability: null, image: "https://files.catbox.moe/o5jocs.webp" },
+  { id: "Cocoa_c_01", name: "Cocoa", title: "Member of the Fake Straw Hat crew", rank: "C", power: 17, attackRange: [3, 8], health: 62, type: "Support", ability: null, image: "https://files.catbox.moe/t3aqns.webp" },
+  { id: "Turco_c_01", name: "Turco", title: "Member of the Fake Straw Hat crew", rank: "C", power: 19, attackRange: [3, 9], health: 68, type: "Support", ability: null, image: "https://files.catbox.moe/0mquzt.webp" },
+
+  // Bartolomeo
+  { id: "Bartolameo_a_01", name: "Bartolameo", title: "Captain of the Barto Club", rank: "A", power: 140, attackRange: [24, 44], health: 200, type: "Attack", ability: null, image: "https://files.catbox.moe/0ue0k2.webp", evolutions: ["Bartolameo_s_02"] },
+  { id: "Bartolameo_s_02", name: "Bartolameo", title: "Captain of the Straw Hat Grand Fleet", rank: "S", power: 320, attackRange: [40, 80], health: 320, type: "Attack", ability: null, image: "https://files.catbox.moe/wdsvmu.webp", evolutions: [], isUpgrade: true, upgradeRequirements: { cost: 9000, minLevel: 35 } },
+
+  { id: "Gambia_c_01", name: "Gambia", title: "Staff officer of the Barto Club", rank: "C", power: 18, attackRange: [3, 9], health: 66, type: "Support", ability: null, image: "https://files.catbox.moe/" },
+
+  { id: "ganzak_a_01", name: "Ganzak", title: "Captian of the Ganzak pirates", rank: "A", power: 135, attackRange: [24, 44], health: 195, type: "Attack", ability: null, image: "https://files.catbox.moe/wa48k4.webp" },
+
+  // TITLE: Member of the Ganzak pirates
+  { id: "Plesiosaur_b_01", name: "Plesiosaur", title: "Member of the Ganzak pirates", rank: "B", power: 56, attackRange: [12, 24], health: 140, type: "Attack", ability: null, image: "https://files.catbox.moe/znmo7e.webp" },
+  { id: "alto_c_01", name: "Alto", title: "Member of the Ganzak pirates", rank: "C", power: 18, attackRange: [3, 9], health: 66, type: "Support", ability: null, image: "https://files.catbox.moe/q8oq52.webp" },
+  { id: "Chico_c_01", name: "Chico", title: "Member of the Ganzak pirates", rank: "C", power: 17, attackRange: [3, 8], health: 62, type: "Support", ability: null, image: "https://files.catbox.moe/xoxme3.webp" },
+
+  // --- END NEW ADDITIONS ---
+  { id: "Wier_c_01", name: "Wier", title: "Random East Blue natives", rank: "C", power: 14, attackRange: [2, 7], health: 48, type: "Support", ability: null, image: "https://files.catbox.moe/h8h05v.webp" }
 ];
+
 
 
 export function getCardById(id) {
@@ -1921,12 +2279,12 @@ export function getRandomCardByProbability(probabilities = { C: 50, B: 30, A: 15
   }
   if (!chosenRank || chosenRank === "ITEM") chosenRank = "C";
   // exclude upgraded versions from pulls
-  const pool = cards.filter((c) => !c.isUpgrade && c.rank && c.rank.toUpperCase() === String(chosenRank).toUpperCase());
+  const pool = cards.filter((c) => !c.isUpgrade && c.rank && c.rank.toUpperCase() === String(chosenRank).toUpperCase() && c.pullable !== false);
   if (pool.length > 0) return pool[Math.floor(Math.random() * pool.length)];
   // fallback should also exclude upgrade variants so evolved cards are never pullable
-  const fallback = cards.filter((c) => !c.isUpgrade && c.rank && c.rank.toUpperCase() !== "ITEM");
+  const fallback = cards.filter((c) => !c.isUpgrade && c.rank && c.rank.toUpperCase() !== "ITEM" && c.pullable !== false);
   if (fallback.length > 0) return fallback[Math.floor(Math.random() * fallback.length)];
-  const nonUpgrade = cards.filter((c) => !c.isUpgrade);
+  const nonUpgrade = cards.filter((c) => !c.isUpgrade && c.pullable !== false);
   return nonUpgrade.length > 0 ? nonUpgrade[Math.floor(Math.random() * nonUpgrade.length)] : cards[Math.floor(Math.random() * cards.length)];
 }
 

@@ -119,17 +119,69 @@ export async function execute(interactionOrMessage) {
       const sessionId = `${userId}_${opponent.id}_${Date.now()}`;
       
       // Get card details and health
+      // Load weapon inventories for both players to apply equipped weapon boosts
+      const WeaponInventory = (await import('../models/WeaponInventory.js')).default;
+      const [p1Winv, p2Winv] = await Promise.all([
+        WeaponInventory.findOne({ userId }),
+        WeaponInventory.findOne({ userId: opponent.id })
+      ]);
+
+      function getEquippedWeaponForCard(winv, cardId) {
+        if (!winv || !winv.weapons) return null;
+        if (winv.weapons instanceof Map) {
+          for (const [wid, w] of winv.weapons.entries()) {
+            if (w && w.equippedTo === cardId) {
+              const wcard = getCardById(wid);
+              if (wcard) return { id: wid, card: wcard, ...w };
+            }
+          }
+        } else {
+          for (const [wid, w] of Object.entries(winv.weapons || {})) {
+            if (w && w.equippedTo === cardId) {
+              const wcard = getCardById(wid);
+              if (wcard) return { id: wid, card: wcard, ...w };
+            }
+          }
+        }
+        return null;
+      }
+
       const p1Cards = p1Progress.team.map(cardId => {
         const card = getCardById(cardId);
         const hasMap = p1Progress.cards && typeof p1Progress.cards.get === 'function';
         const progress = hasMap ? (p1Progress.cards.get(cardId) || { level: 0, xp: 0 }) : (p1Progress.cards[cardId] || { level: 0, xp: 0 });
         const level = progress.level || 0;
         const mult = 1 + (level * 0.01);
-        const health = Math.round((card.health || 0) * mult);
-        const attackMin = Math.round((card.attackRange?.[0] || 0) * mult);
-        const attackMax = Math.round((card.attackRange?.[1] || 0) * mult);
+        let health = Math.round((card.health || 0) * mult);
+        let attackMin = Math.round((card.attackRange?.[0] || 0) * mult);
+        let attackMax = Math.round((card.attackRange?.[1] || 0) * mult);
         const special = card.specialAttack ? { ...card.specialAttack, range: [(card.specialAttack.range[0] || 0) * mult, (card.specialAttack.range[1] || 0) * mult] } : null;
-        const power = Math.round((card.power || 0) * mult);
+        let power = Math.round((card.power || 0) * mult);
+
+        // Apply equipped weapon boosts if present
+        const equipped = getEquippedWeaponForCard(p1Winv, cardId);
+        if (equipped && equipped.card && card.signatureWeapon === equipped.id) {
+          const weaponCard = equipped.card;
+          const weaponLevel = equipped.level || 1;
+          const weaponLevelBoost = (weaponLevel - 1) * 0.01;
+          // only apply 25% signature when card is listed as upgrade 2+ in weapon.signatureCards
+          let sigBoost = 0;
+          if (weaponCard.signatureCards && Array.isArray(weaponCard.signatureCards)) {
+            const idx = weaponCard.signatureCards.indexOf(cardId);
+            if (idx > 0) sigBoost = 0.25;
+          }
+          const totalWeaponBoost = 1 + weaponLevelBoost + sigBoost;
+
+          if (weaponCard.boost) {
+            const atkBoost = Math.round((weaponCard.boost.atk || 0) * totalWeaponBoost);
+            const hpBoost = Math.round((weaponCard.boost.hp || 0) * totalWeaponBoost);
+            power += atkBoost;
+            attackMin += atkBoost;
+            attackMax += atkBoost;
+            health += hpBoost;
+          }
+        }
+
         return { cardId, card, scaled: { attackRange: [attackMin, attackMax], specialAttack: special, power }, health, maxHealth: health, level };
       });
 
@@ -139,11 +191,35 @@ export async function execute(interactionOrMessage) {
         const progress = hasMap ? (p2Progress.cards.get(cardId) || { level: 0, xp: 0 }) : (p2Progress.cards[cardId] || { level: 0, xp: 0 });
         const level = progress.level || 0;
         const mult = 1 + (level * 0.01);
-        const health = Math.round((card.health || 0) * mult);
-        const attackMin = Math.round((card.attackRange?.[0] || 0) * mult);
-        const attackMax = Math.round((card.attackRange?.[1] || 0) * mult);
+        let health = Math.round((card.health || 0) * mult);
+        let attackMin = Math.round((card.attackRange?.[0] || 0) * mult);
+        let attackMax = Math.round((card.attackRange?.[1] || 0) * mult);
         const special = card.specialAttack ? { ...card.specialAttack, range: [Math.round((card.specialAttack.range[0] || 0) * mult), Math.round((card.specialAttack.range[1] || 0) * mult)] } : null;
-        const power = Math.round((card.power || 0) * mult);
+        let power = Math.round((card.power || 0) * mult);
+
+        // Apply equipped weapon boosts if present
+        const equipped = getEquippedWeaponForCard(p2Winv, cardId);
+        if (equipped && equipped.card && card.signatureWeapon === equipped.id) {
+          const weaponCard = equipped.card;
+          const weaponLevel = equipped.level || 1;
+          const weaponLevelBoost = (weaponLevel - 1) * 0.01;
+          let sigBoost = 0;
+          if (weaponCard.signatureCards && Array.isArray(weaponCard.signatureCards)) {
+            const idx = weaponCard.signatureCards.indexOf(cardId);
+            if (idx > 0) sigBoost = 0.25;
+          }
+          const totalWeaponBoost = 1 + weaponLevelBoost + sigBoost;
+
+          if (weaponCard.boost) {
+            const atkBoost = Math.round((weaponCard.boost.atk || 0) * totalWeaponBoost);
+            const hpBoost = Math.round((weaponCard.boost.hp || 0) * totalWeaponBoost);
+            power += atkBoost;
+            attackMin += atkBoost;
+            attackMax += atkBoost;
+            health += hpBoost;
+          }
+        }
+
         return { cardId, card, scaled: { attackRange: [attackMin, attackMax], specialAttack: special, power }, health, maxHealth: health, level };
       });
 
