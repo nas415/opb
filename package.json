@@ -15,6 +15,7 @@
     "discord.js": "^14.24.0",
     "dotenv": "^16.4.5",
     "mongodb": "^6.20.0",
-    "mongoose": "^8.19.2"
+    "mongoose": "^8.19.2",
+    "tweetnacl": "^1.0.3"
   }
 }

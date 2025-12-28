@@ -51,6 +51,23 @@ curl http://localhost:3000/health
 
 If you'd like, I can add a `Procfile`, a `render.yaml` template, or step-by-step instructions for creating the Render service.
 
+---
+
+### Running as a Web Service (Render, Railway) without Gateway access 🚧
+
+Some hosts block WebSocket egress from web service processes which prevents Discord gateway login. This repository now supports a fallback "interactions webhook" mode so the bot can handle slash commands via HTTP without maintaining a gateway connection.
+
+Steps to use the fallback mode:
+
+1. In the Discord Developer Portal, set your **Application's** Public Key into `DISCORD_PUBLIC_KEY` on your host's environment variables (hex encoded, as shown in the portal).
+2. Ensure your service is reachable publicly and set the **Interactions** / Request URL for your application to `https://<your-service>/interactions` in the Discord Developer Portal.
+3. Keep `TOKEN` set (required for command registration). Prefer registering slash commands manually using `npm run deploy` once instead of auto-registering every deploy to avoid rate limits.
+4. If gateway login fails due to egress restrictions, the service will still accept `/interactions` POSTs and run the associated command handlers.
+
+Notes:
+- Message-based prefix commands ("op help") still require a gateway connection (Message Content intent) and will not work in webhook-only mode. Move to slash commands for full web-only compatibility.
+- Keep your public key secret only in environment variables; do not commit it.
+
 ### Optional: Auto-register slash commands on start
 
 If you'd like the app to automatically attempt to register slash commands at startup, set the environment variable `REGISTER_COMMANDS_ON_START=true` on Render. This will run `deploy-commands.js` once at startup. Be careful — registering often can hit rate limits (429). Recommended: run the registration manually when you add/modify commands (run `npm run deploy`), or set `REGISTER_COMMANDS_ON_START=true` only when you intentionally want to register commands.

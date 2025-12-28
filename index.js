@@ -123,6 +123,116 @@ const server = http.createServer((req, res) => {
     return res.end(JSON.stringify(payload));
   }
 
+  // Interactions endpoint: used when running as a web service without a gateway connection
+  if (req.method === "POST" && req.url === "/interactions") {
+    // Read raw body
+    let body = "";
+    req.on('data', (chunk) => { body += chunk.toString(); });
+    req.on('end', async () => {
+      try {
+        // signature verification requires DISCORD_PUBLIC_KEY
+        const sig = req.headers['x-signature-ed25519'];
+        const ts = req.headers['x-signature-timestamp'];
+        if (!sig || !ts || !process.env.DISCORD_PUBLIC_KEY) {
+          console.warn('Interaction received but verification could not be performed (missing headers or DISCORD_PUBLIC_KEY).');
+          res.writeHead(401);
+          return res.end('invalid request');
+        }
+
+        const verifyResult = await (async () => {
+          try {
+            const nacl = await import('tweetnacl');
+            const msg = Buffer.concat([Buffer.from(ts, 'utf8'), Buffer.from(body, 'utf8')]);
+            const sigBuf = Buffer.from(sig, 'hex');
+            const pubKey = Buffer.from(process.env.DISCORD_PUBLIC_KEY, 'hex');
+            return nacl.sign.detached.verify(msg, sigBuf, pubKey);
+          } catch (e) {
+            console.error('Error during signature verification:', e && e.message ? e.message : e);
+            return false;
+          }
+        })();
+
+        if (!verifyResult) {
+          console.warn('⚠️ Interaction signature verification failed.');
+          res.writeHead(401);
+          return res.end('invalid signature');
+        }
+
+        const payload = JSON.parse(body);
+        // PING
+        if (payload.type === 1) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ type: 1 }));
+        }
+
+        // Only handle APPLICATION_COMMAND (2)
+        if (payload.type === 2 && payload.data && payload.data.name) {
+          const name = payload.data.name.toLowerCase();
+          const cmd = client.commands.get(name);
+          if (!cmd) {
+            console.warn('Received interaction for unknown command:', name);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ type: 4, data: { content: 'Command not found', flags: 64 } }));
+          }
+
+          // Build a minimal Interaction-like object compatible with our command handlers
+          const interaction = {
+            id: payload.id,
+            token: payload.token,
+            user: payload.member?.user || payload.user,
+            isCommand: () => true,
+            isChatInputCommand: () => true,
+            options: {
+              getString: (n) => {
+                const opt = (payload.data.options || []).find(o => o.name === n);
+                return opt ? opt.value : null;
+              },
+              getInteger: (n) => {
+                const opt = (payload.data.options || []).find(o => o.name === n);
+                return opt ? parseInt(opt.value, 10) : null;
+              },
+              // add other getters as needed
+            },
+            reply: async (resp) => {
+              // Convert discord.js-style reply into raw interaction response
+              const data = {};
+              if (typeof resp === 'string') data.content = resp;
+              else if (resp && resp.content) data.content = resp.content;
+              else if (resp && resp.embeds) data.embeds = resp.embeds;
+              if (resp && resp.flags) data.flags = resp.flags;
+
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              return res.end(JSON.stringify({ type: 4, data }));
+            }
+          };
+
+          try {
+            // execute command; commands may call interaction.reply which we handle above
+            await cmd.execute(interaction, client);
+            // If the command didn't call reply directly, send a default ack
+            // (some commands might already have replied) — send nothing here to avoid double response.
+          } catch (e) {
+            console.error('Error executing command for interaction:', e && e.message ? e.message : e);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ type: 4, data: { content: 'Internal error', flags: 64 } }));
+          }
+
+          return;
+        }
+
+        // Other interaction types: just acknowledge
+        res.writeHead(200);
+        res.end();
+      } catch (err) {
+        console.error('Error handling interaction:', err && err.message ? err.message : err);
+        res.writeHead(500);
+        res.end('server error');
+      }
+    });
+
+    return;
+  }
+
   res.writeHead(404);
   res.end();
 });
