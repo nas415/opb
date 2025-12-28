@@ -388,7 +388,6 @@ if (!process.env.TOKEN) {
 
     if (!dnsRes.ok) {
       console.error('Network/DNS check failed — outbound network to discord.com may be blocked from this environment.');
-      // Keep process alive for debugging instead of exiting so you can debug; exit on invalid token was handled earlier.
     }
 
     if (!tokenRes.ok) {
@@ -397,11 +396,10 @@ if (!process.env.TOKEN) {
         process.exit(1);
       }
       if (tokenRes.error === 'rate_limited' || tokenRes.status === 429) {
-        console.warn('⚠️ Token REST check is being rate limited. Proceeding to websocket login immediately, to avoid long startup delays. Consider setting DISABLE_REST_CHECK=true to skip REST checks on startup.');
+        console.warn('⚠️ Token REST check is being rate limited. Proceeding to websocket login attempts immediately to avoid startup delay. Consider setting DISABLE_REST_CHECK=true to skip REST checks on startup.');
       } else {
         console.error('Token REST check failed:', tokenRes);
       }
-      // Continue and attempt websocket login; it may still succeed if REST is rate-limited.
     }
 
     // Add more event diagnostics for connection issues
@@ -409,26 +407,73 @@ if (!process.env.TOKEN) {
     client.on('shardError', (err) => console.error('shard error:', err));
     client.on('shardDisconnect', (event, shardId) => console.warn('shard disconnect:', { event, shardId }));
 
-    try {
-      if (process.env.DISABLE_GATEWAY === 'true' || process.env.INTERACTIONS_ONLY === 'true') {
-        console.log('DISABLE_GATEWAY/INTERACTIONS_ONLY is set — skipping Discord gateway login and running in interactions-only mode.');
-        globalThis.GATEWAY_MODE = 'disabled';
-      } else {
-        const loginRes = await loginWithRetries(process.env.TOKEN, 3);
-        if (!loginRes.ok) {
-          console.error('❌ Discord websocket login failed after retries:', loginRes.error && loginRes.error.message ? loginRes.error.message : loginRes.error);
-          console.log('Falling back to interactions-only mode; set DISABLE_GATEWAY=true to skip gateway on future deploys.');
-          globalThis.GATEWAY_MODE = 'failed';
-        } else {
-          console.log('✅ Discord login initiated — waiting for ready event...');
+    // WebSocket connectivity test
+    const testWebsocketOnce = async () => {
+      try {
+        const { WebSocket } = await import('ws');
+        return await new Promise((resolve) => {
+          let settled = false;
+          const ws = new WebSocket('wss://gateway.discord.gg/?v=10&encoding=json');
+          const cleanup = () => { try { ws.terminate(); } catch (e) {} };
+          const finish = (ok, msg) => { if (settled) return; settled = true; cleanup(); resolve({ ok, msg }); };
+          ws.on('open', () => finish(true, 'WS open'));
+          ws.on('message', (m) => {/* ignore messages */});
+          ws.on('error', (e) => finish(false, e && e.message ? e.message : String(e)));
+          ws.on('close', (code, reason) => finish(false, `WS closed: ${code} ${reason ? reason.toString().slice(0,100) : ''}`));
+          setTimeout(() => finish(false, 'WS test timeout'), 10000);
+        });
+      } catch (e) {
+        console.error('WS test import error:', e && e.message ? e.message : e);
+        return { ok: false, msg: e && e.message ? e.message : e };
+      }
+    };
+
+    // background login loop with exponential backoff and respect for Retry-After when available
+    const maxBackoff = 60 * 60 * 1000; // 1 hour
+    const base = 5000;
+    let attempt = 0;
+    let lastRetryAfter = tokenRes && tokenRes.retryAfterMs ? tokenRes.retryAfterMs : 0;
+
+    if (process.env.DISABLE_GATEWAY === 'true' || process.env.INTERACTIONS_ONLY === 'true') {
+      console.log('DISABLE_GATEWAY/INTERACTIONS_ONLY is set — skipping Discord gateway login and running in interactions-only mode.');
+      globalThis.GATEWAY_MODE = 'disabled';
+      return;
+    }
+
+    (async function gatewayLoop(){
+      while (true) {
+        attempt++;
+        try {
+          console.log(`Gateway attempt ${attempt}: performing WS connectivity check...`);
+          const wsRes = await testWebsocketOnce();
+          if (!wsRes.ok) console.warn('WS connectivity test failed:', wsRes.msg);
+          else console.log('WS connectivity test success');
+
           globalThis.GATEWAY_MODE = 'connecting';
+          console.log(`Attempting gateway login (attempt ${attempt})...`);
+          await Promise.race([
+            client.login(process.env.TOKEN),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Discord login timed out')), 60000)),
+          ]);
+          console.log('✅ Discord login initiated — waiting for ready event...');
+          return; // success
+        } catch (err) {
+          console.error(`Gateway login attempt ${attempt} failed:`, err && err.message ? err.message : err);
+          globalThis.GATEWAY_MODE = 'failed';
+          // determine wait time
+          let wait = Math.ceil(base * Math.pow(2, Math.min(attempt - 1, 6)));
+          if (lastRetryAfter && lastRetryAfter > wait) wait = lastRetryAfter;
+          if (wait > maxBackoff) wait = maxBackoff;
+          console.log(`Waiting ${wait}ms before next gateway attempt...`);
+          await sleep(wait);
+          // Refresh token REST info to catch updated Retry-After if any
+          try {
+            const fresh = await checkTokenRestWithRetries(process.env.TOKEN, 1);
+            if (fresh && fresh.retryAfterMs) lastRetryAfter = fresh.retryAfterMs;
+          } catch (e) {}
+          continue;
         }
       }
-    } catch (err) {
-      console.error('❌ Unexpected error during websocket login:', err && err.message ? err.message : err);
-      console.log('Falling back to interactions-only mode due to unexpected error.');
-      globalThis.GATEWAY_MODE = 'failed';
-      // do not exit; continue running as interactions-only fallback
-    }
+    })();
   })();
 }
