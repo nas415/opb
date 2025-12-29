@@ -9,15 +9,15 @@ export const data = new SlashCommandBuilder()
   .addIntegerOption(opt => opt.setName("amount").setDescription("Amount to buy").setMinValue(1));
 
 const SHOP = {
-  chests: { C: 100, B: 250, A: 500, S: 2000 },
+  chests: { C: 200, B: 500, A: 1000, S: 5000 },
   materials: {
-    steel: 20, iron: 15, wood: 5, leather: 30, "ray skin": 100, titanium: 200, obsidian: 150, spring: 10, aluminum: 25, brass: 15, diamond: 500
+    steel: 500, iron: 500, wood: 500, leather: 500, "ray skin": 500, titanium: 500, obsidian: 500, spring: 500, aluminum: 500, brass: 500, diamond: 1000
   },
   legendary: {
     "log pose": 5000, map: 3000, "gold bar": 10000, "jolly roger flag": 4000, "crew contract": 8000, "ancient relic": 12000, "s rank summon": 15000, awakening: 20000
   },
   others: {
-    "reset token": 1000, "xp book": 250, "xp scroll": 150, "battle token": 50
+    "reset token": 800, "xp book": 500, "xp scroll": 60, "battle token": 60
   }
 };
 
@@ -132,6 +132,20 @@ export async function execute(interactionOrMessage) {
   }
 
   await inv.save();
+
+  // Record quest progress for buying items
+  try {
+    const Quest = (await import('../models/Quest.js')).default;
+    const [dailyQuests, weeklyQuests] = await Promise.all([
+      Quest.getCurrentQuests('daily'),
+      Quest.getCurrentQuests('weekly')
+    ]);
+    if (dailyQuests && dailyQuests.recordAction) await dailyQuests.recordAction(userId, 'buy', amount);
+    if (weeklyQuests && weeklyQuests.recordAction) await weeklyQuests.recordAction(userId, 'buy', amount);
+  } catch (e) {
+    // non-fatal
+    console.error('Failed to record buy quest progress:', e && e.message ? e.message : e);
+  }
 
   const reply = `Purchased ${amount} x ${found.key} for ${total}¥.`;
   if (isInteraction) return interactionOrMessage.reply({ content: reply });

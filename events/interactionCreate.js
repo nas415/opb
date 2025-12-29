@@ -40,6 +40,7 @@ export async function execute(interaction, client) {
     // handle select menus first
     if (interaction.isStringSelectMenu && interaction.isStringSelectMenu()) {
       const id = interaction.customId || "";
+      // collection select for sorting
       if (id.startsWith("collection_sort:")) {
         const parts = id.split(":");
         const ownerId = parts[1];
@@ -83,12 +84,8 @@ export async function execute(interaction, client) {
         const pageItems = items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
         const lines = pageItems.map((it, idx) => {
           const card = it.card;
-          const entry = it.entry;
-          const level = entry.level || 0;
-          const power = roundNearestFive(Math.round((card.power || 0) * (1 + level * 0.01)));
-          const attack = `${roundNearestFive(Math.round((card.attackRange?.[0] || 0) * (1 + level * 0.01)))} - ${roundNearestFive(Math.round((card.attackRange?.[1] || 0) * (1 + level * 0.01)))}`;
-          const health = roundNearestFive(Math.round((card.health || 0) * (1 + level * 0.01)));
-          return `**${idx + 1}. ${card.name}** (Lv ${level}) — Power: ${power} | Attack: ${attack} | HP: ${health}`;
+          const rank = getRankInfo(card.rank)?.name || (card.rank || "-");
+          return `**${idx + 1}. ${card.name}** [${rank}]`;
         });
 
         const embed = new EmbedBuilder().setTitle('Collection').setDescription(lines.join('\n')).setFooter({ text: `Page ${page + 1}/${totalPages}` });
@@ -109,20 +106,67 @@ export async function execute(interaction, client) {
         const sortRow = new ActionRowBuilder().addComponents(sortMenu);
         const prevId = `collection_prev:${ownerId}:${sortVal}:${page}`;
         const nextId = `collection_next:${ownerId}:${sortVal}:${page}`;
+        const infoId = `collection_info:${ownerId}:${sortVal}:${page}`;
         const row = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId(prevId).setLabel('Previous').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId(nextId).setLabel('Next').setStyle(ButtonStyle.Secondary)
+          new ButtonBuilder().setCustomId(nextId).setLabel('Next').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId(infoId).setLabel('ⓘ').setStyle(ButtonStyle.Primary)
         );
 
         await interaction.update({ embeds: [embed], components: [sortRow, row] });
+        return;
+      }
+
+      // selection from a collection page (inspect a card from the current page)
+      if (id.startsWith("collection_select:")) {
+        const parts = id.split(":");
+        const ownerId = parts[1];
+        const sortKey = parts[2] || 'best';
+        const page = parseInt(parts[3] || '0', 10) || 0;
+        if (interaction.user.id !== ownerId) return interaction.reply({ content: "Only the original requester can use this select.", ephemeral: true });
+
+        const progDoc = await Progress.findOne({ userId: ownerId });
+        if (!progDoc || !progDoc.cards) return interaction.reply({ content: "You have no cards.", ephemeral: true });
+        const cardsMap = progDoc.cards instanceof Map ? progDoc.cards : new Map(Object.entries(progDoc.cards || {}));
+        const items = [];
+        for (const [cardId, entry] of cardsMap.entries()) {
+          const card = getCardById(cardId);
+          if (!card) continue;
+          items.push({ card, entry });
+        }
+
+        // normalize sort aliases
+        let mode = sortKey;
+        if (mode === 'level_desc' || mode === 'lbtw') mode = 'lbtw';
+        if (mode === 'level_asc' || mode === 'lwtb') mode = 'lwtb';
+        if (mode === "best") items.sort((a, b) => (1 * ((b.entry.level||0) - (a.entry.level||0))) || 0);
+        else if (mode === "wtb") items.sort((a, b) => (a.entry.level||0) - (b.entry.level||0));
+
+        const PAGE_SIZE = 5;
+        const pageItems = items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+        const selectedId = interaction.values && interaction.values[0];
+        const card = getCardById(selectedId);
+        if (!card) return interaction.reply({ content: "Card not found.", ephemeral: true });
+
+        const ownedEntry = cardsMap.get(card.id) || null;
+        const viewer = interaction.user;
+        const embed = (ownedEntry && (ownedEntry.count||0) > 0) ? buildUserCardEmbed(card, ownedEntry, viewer) : buildCardEmbed(card, ownedEntry, viewer);
+
+        const backId = `collection_back:${ownerId}:${sortKey}:${page}`;
+        const backRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(backId).setLabel('Back').setStyle(ButtonStyle.Secondary));
+        if (!embed) return interaction.update({ content: 'Unable to display card info.', ephemeral: true });
+        await interaction.update({ embeds: [embed], components: [backRow] });
         return;
       }
     }
 
     if (interaction.isButton()) {
       const id = interaction.customId || "";
-      // only handle known prefixes (include shop_ and duel_ pagination)
-      if (!id.startsWith("info_") && !id.startsWith("collection_") && !id.startsWith("quest_") && !id.startsWith("help_") && !id.startsWith("drop_claim") && !id.startsWith("shop_") && !id.startsWith("duel_")) return;
+      // only handle known prefixes (include shop_). Let per-message duel_* collectors handle duel interactions.
+      if (!id.startsWith("info_") && !id.startsWith("collection_") && !id.startsWith("quest_") && !id.startsWith("help_") && !id.startsWith("drop_claim") && !id.startsWith("shop_")) return;
+      // ignore duel_* here so message-level collectors in `commands/duel.js` receive them
+      if (id.startsWith("duel_")) return;
 
       const parts = id.split(":");
       if (parts.length < 2) return;
@@ -445,27 +489,29 @@ export async function execute(interaction, client) {
           const ownedEntry = cardsMap.get(newCard.id) || null;
 
           // build embed using shared builder so layout matches info command
+          // Always show the base (unmodified) card embed for navigation —
+          // keep user-specific stats separate and reachable via the "👤" button.
           const newEmbed = buildCardEmbed(newCard, ownedEntry, interaction.user);
           if (!ownedEntry || (ownedEntry.count || 0) <= 0) {
             newEmbed.setColor(0x2f3136);
 
-                    // Check if this card is a lower version of an upgrade owned by user
-                    // Only block when the user does NOT own the requested card
-                    const chainForPag = getEvolutionChain(newCard);
-                    let ownedHigherIdForPag = null;
-                    for (let i = chainForPag.indexOf(newCard.id) + 1; i < chainForPag.length; i++) {
-                      const higherCardId = chainForPag[i];
-                      const higherEntry = cardsMap.get(higherCardId);
-                      if (higherEntry && (higherEntry.count || 0) > 0) {
-                        ownedHigherIdForPag = higherCardId;
-                        break;
-                      }
-                    }
-                    if ((!ownedEntry || (ownedEntry.count || 0) <= 0) && ownedHigherIdForPag) {
-                      const ownedHigher = getCardById(ownedHigherIdForPag);
-                      await interaction.reply({ content: `You own a higher version (${ownedHigher?.name || 'upgraded version'}) and cannot view this version.`, ephemeral: true });
-                      return;
-                    }
+            // Check if this card is a lower version of an upgrade owned by user
+            // Only block when the user does NOT own the requested card
+            const chainForPag = getEvolutionChain(newCard);
+            let ownedHigherIdForPag = null;
+            for (let i = chainForPag.indexOf(newCard.id) + 1; i < chainForPag.length; i++) {
+              const higherCardId = chainForPag[i];
+              const higherEntry = cardsMap.get(higherCardId);
+              if (higherEntry && (higherEntry.count || 0) > 0) {
+                ownedHigherIdForPag = higherCardId;
+                break;
+              }
+            }
+            if ((!ownedEntry || (ownedEntry.count || 0) <= 0) && ownedHigherIdForPag) {
+              const ownedHigher = getCardById(ownedHigherIdForPag);
+              await interaction.reply({ content: `You own a higher version (${ownedHigher?.name || 'upgraded version'}) and cannot view this version.`, ephemeral: true });
+              return;
+            }
           }
 
           // compute prev/next indices for this chain and attach buttons
@@ -475,8 +521,8 @@ export async function execute(interaction, client) {
           const nextIdNew = `info_next:${ownerId}:${rootCard.id}:${nextIndex}`;
 
           const btns = [
-            new ButtonBuilder().setCustomId(prevIdNew).setLabel("Previous").setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(nextIdNew).setLabel("Next").setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(prevIdNew).setLabel("Previous mastery").setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(nextIdNew).setLabel("Next mastery").setStyle(ButtonStyle.Primary)
           ];
 
           // if the user owns this card, add the "Your stats" primary button
@@ -484,8 +530,8 @@ export async function execute(interaction, client) {
             btns.push(
               new ButtonBuilder()
                 .setCustomId(`info_userstats:${ownerId}:${newCard.id}`)
-                .setLabel("Your stats")
-                .setStyle(ButtonStyle.Primary)
+                .setLabel("👤")
+                .setStyle(ButtonStyle.Secondary)
             );
           }
 
@@ -688,7 +734,7 @@ export async function execute(interaction, client) {
 
         const buttons = [];
         if (userWeapon) {
-          buttons.push(new ButtonBuilder().setCustomId(`info_userweapon:${userId}:${weaponId}`).setLabel("Your stats").setStyle(ButtonStyle.Primary));
+          buttons.push(new ButtonBuilder().setCustomId(`info_userweapon:${userId}:${weaponId}`).setLabel("👤").setStyle(ButtonStyle.Secondary));
         }
         buttons.push(new ButtonBuilder().setCustomId(`info_weaponbase:${userId}:${weaponId}`).setLabel("Base Stats").setStyle(ButtonStyle.Secondary));
 
@@ -729,7 +775,8 @@ export async function execute(interaction, client) {
           }
         }
 
-        // Build base card embed
+        // Build base (unmodified) card embed — user-specific stats are shown
+        // only when the user presses the "👤" (Your stats) button.
         const baseEmbed = buildCardEmbed(card, ownedEntry, interaction.user);
         if (!ownedEntry || (ownedEntry.count || 0) <= 0) {
           baseEmbed.setColor(0x2f3136);
@@ -750,12 +797,12 @@ export async function execute(interaction, client) {
           buttons.push(
             new ButtonBuilder()
               .setCustomId(prevIdBase)
-              .setLabel("Previous")
-              .setStyle(ButtonStyle.Secondary),
+              .setLabel("Previous mastery")
+              .setStyle(ButtonStyle.Primary),
             new ButtonBuilder()
               .setCustomId(nextIdBase)
-              .setLabel("Next")
-              .setStyle(ButtonStyle.Secondary)
+              .setLabel("Next mastery")
+              .setStyle(ButtonStyle.Primary)
           );
         }
         
@@ -764,8 +811,8 @@ export async function execute(interaction, client) {
           buttons.push(
             new ButtonBuilder()
               .setCustomId(`info_userstats:${userId}:${card.id}`)
-              .setLabel("Your stats")
-              .setStyle(ButtonStyle.Primary)
+              .setLabel("👤")
+              .setStyle(ButtonStyle.Secondary)
           );
         }
 
@@ -818,29 +865,56 @@ export async function execute(interaction, client) {
         const PAGE_SIZE = 5;
         const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
         let newPage = pageNum;
+        // If user clicked the info button for this page, show a select menu of the page's characters
+        if (action === 'collection_info') {
+          const pageItems = items.slice(pageNum * PAGE_SIZE, (pageNum + 1) * PAGE_SIZE);
+          const options = pageItems.map((it, idx) => {
+            const card = it.card;
+            return { label: card.name, value: card.id, description: getRankInfo(card.rank)?.name || (card.rank || '') };
+          });
+          const select = new StringSelectMenuBuilder().setCustomId(`collection_select:${ownerId}:${sortKey}:${pageNum}`).setPlaceholder('Select a character').addOptions(options);
+          const rows = [new ActionRowBuilder().addComponents(select)];
+          await interaction.update({ embeds: [], components: rows });
+          return;
+        }
         if (action === "collection_prev") newPage = Math.max(0, pageNum - 1);
         if (action === "collection_next") newPage = Math.min(totalPages - 1, pageNum + 1);
+        if (action === "collection_back") newPage = pageNum; // simply re-render the same page (back target)
 
+        // Compact page rendering: name + rank only (preserve new collection UI)
         const pageItems = items.slice(newPage * PAGE_SIZE, (newPage + 1) * PAGE_SIZE);
         const lines = pageItems.map((it, idx) => {
           const card = it.card;
-          const entry = it.entry;
-          const level = entry.level || 0;
-          const power = roundNearestFive(Math.round((card.power || 0) * (1 + level * 0.01)));
-          const attack = `${roundNearestFive(Math.round((card.attackRange?.[0] || 0) * (1 + level * 0.01)))} - ${roundNearestFive(Math.round((card.attackRange?.[1] || 0) * (1 + level * 0.01)))}`;
-          const health = roundNearestFive(Math.round((card.health || 0) * (1 + level * 0.01)));
-          return `**${newPage * PAGE_SIZE + idx + 1}. ${card.name}** (Lv ${level}) — Power: ${power} | Attack: ${attack} | HP: ${health}`;
+          const rank = getRankInfo(card.rank)?.name || (card.rank || "-");
+          return `**${newPage * PAGE_SIZE + idx + 1}. ${card.name}** [${rank}]`;
         });
 
         const embed = new EmbedBuilder().setTitle("Collection").setDescription(lines.join("\n")).setFooter({ text: `Page ${newPage + 1}/${totalPages}` });
         const prevIdNew = `collection_prev:${ownerId}:${sortKey}:${newPage}`;
         const nextIdNew = `collection_next:${ownerId}:${sortKey}:${newPage}`;
+        const infoIdNew = `collection_info:${ownerId}:${sortKey}:${newPage}`;
         const row = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId(prevIdNew).setLabel("Previous").setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId(nextIdNew).setLabel("Next").setStyle(ButtonStyle.Secondary)
+          new ButtonBuilder().setCustomId(nextIdNew).setLabel("Next").setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId(infoIdNew).setLabel('ⓘ').setStyle(ButtonStyle.Primary)
         );
 
-        await interaction.update({ embeds: [embed], components: [row] });
+        // Recreate sort dropdown so it persists across pagination
+        const sortMenu = new StringSelectMenuBuilder()
+          .setCustomId(`collection_sort:${ownerId}`)
+          .setPlaceholder('Sort collection')
+          .addOptions([
+            { label: 'Best to Worst', value: 'best' },
+            { label: 'Worst to Best', value: 'wtb' },
+            { label: 'Level High → Low', value: 'lbtw' },
+            { label: 'Level Low → High', value: 'lwtb' },
+            { label: 'Rank High → Low', value: 'rank' },
+            { label: 'Newest → Oldest', value: 'nto' },
+            { label: 'Oldest → Newest', value: 'otn' }
+          ]);
+        const sortRow = new ActionRowBuilder().addComponents(sortMenu);
+
+        await interaction.update({ embeds: [embed], components: [sortRow, row] });
         return;
       }
     }

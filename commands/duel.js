@@ -341,7 +341,7 @@ async function startDuelTurn(sessionId, channel) {
   function renderHP(cur, max, len = 10) {
     const ratio = max > 0 ? cur / max : 0;
     const filled = Math.max(0, Math.min(len, Math.round(ratio * len)));
-    return '█'.repeat(filled) + '░'.repeat(len - filled);
+    return '▬'.repeat(filled) + '▭'.repeat(len - filled);
   }
 
   // Build character list text with modern UI (no emojis)
@@ -578,7 +578,7 @@ async function executeAttack(sessionId, charIdx, attackType, targetIdx, msg, att
   function renderHP(cur, max, len = 10) {
     const ratio = max > 0 ? cur / max : 0;
     const filled = Math.max(0, Math.min(len, Math.round(ratio * len)));
-    return '█'.repeat(filled) + '░'.repeat(len - filled);
+    return '▬'.repeat(filled) + '▭'.repeat(len - filled);
   }
 
   const hpBar = renderHP(Math.max(0, targetCard.health), targetCard.maxHealth);

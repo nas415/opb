@@ -28,12 +28,9 @@ function buildCollectionEmbed(pageItems, page, totalPages, sortLabel) {
   const embed = new EmbedBuilder().setTitle(`Collection — ${sortLabel}`);
   const lines = pageItems.map((it, idx) => {
     const card = it.card;
-    const entry = it.entry;
-    const level = entry.level || 0;
-    const power = roundNearestFive(Math.round((card.power || 0) * (1 + level * 0.01)));
-    const attack = `${roundNearestFive(Math.round(card.attackRange[0] * (1 + level * 0.01)))} - ${roundNearestFive(Math.round(card.attackRange[1] * (1 + level * 0.01)))}`;
-    const health = roundNearestFive(Math.round((card.health || 0) * (1 + level * 0.01)));
-    return `**${idx + 1}. ${card.name}** (Lv ${level}) — Power: ${power} | Attack: ${attack} | HP: ${health}`;
+    // Compact listing: only show name and rank (no stats)
+    const rank = getRankInfo(card.rank)?.name || (card.rank || "-");
+    return `**${idx + 1}. ${card.name}** [${rank}]`;
   });
   embed.setDescription(lines.join("\n"));
   embed.setFooter({ text: `Page ${page + 1}/${totalPages}` });
@@ -138,9 +135,11 @@ export async function execute(interactionOrMessage, client) {
 
   const prevId = `collection_prev:${userId}:${sortKey}:${page}`;
   const nextId = `collection_next:${userId}:${sortKey}:${page}`;
+  const infoId = `collection_info:${userId}:${sortKey}:${page}`;
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(prevId).setLabel("Previous").setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(nextId).setLabel("Next").setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId(nextId).setLabel("Next").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(infoId).setLabel("ⓘ").setStyle(ButtonStyle.Primary)
   );
 
   // add a select menu for sort options (interaction only)
@@ -159,5 +158,5 @@ export async function execute(interactionOrMessage, client) {
   const sortRow = new ActionRowBuilder().addComponents(sortMenu);
 
   if (isInteraction) await interactionOrMessage.reply({ embeds: [embed], components: [sortRow, row] });
-  else await channel.send({ embeds: [embed], components: [row] });
+  else await channel.send({ embeds: [embed], components: [sortRow, row] });
 }

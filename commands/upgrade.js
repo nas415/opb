@@ -27,7 +27,7 @@ export async function execute(interactionOrMessage, client) {
   const query = isInteraction ? interactionOrMessage.options.getString("card") : interactionOrMessage.content.trim().split(/\s+/).slice(2).join(" ");
   const baseCard = fuzzyFindCard(query);
   if (!baseCard) {
-    const reply = `No card matching "${query}" found.`;
+    const reply = `Please state a valid card`;
     if (isInteraction) await interactionOrMessage.reply({ content: reply, ephemeral: true }); else await channel.send(reply);
     return;
   }
@@ -35,20 +35,20 @@ export async function execute(interactionOrMessage, client) {
   // find upgrade target from baseCard.evolutions (first upgrade)
   const evoIds = baseCard.evolutions || [];
   if (!evoIds.length) {
-    const reply = `No upgrade available for ${baseCard.name}.`;
+    const reply = `No upgrade available for **${baseCard.name}**.`;
     if (isInteraction) await interactionOrMessage.reply({ content: reply, ephemeral: true }); else await channel.send(reply);
     return;
   }
 
   const upgradeCard = getCardById(evoIds[0]);
   if (!upgradeCard) {
-    const reply = `Upgrade data not found for ${baseCard.name}.`;
+    const reply = `Upgrade data not found for **${baseCard.name}**.`;
     if (isInteraction) await interactionOrMessage.reply({ content: reply, ephemeral: true }); else await channel.send(reply);
     return;
   }
 
   if (!upgradeCard.upgradeRequirements) {
-    const reply = `Upgrade requirements not set for ${upgradeCard.name}.`;
+    const reply = `Upgrade requirements not set for **${upgradeCard.name}**.`;
     if (isInteraction) await interactionOrMessage.reply({ content: reply, ephemeral: true }); else await channel.send(reply);
     return;
   }
@@ -68,7 +68,7 @@ export async function execute(interactionOrMessage, client) {
   const userLevel = baseEntry.level || 0;
   const { cost, minLevel } = upgradeCard.upgradeRequirements;
   if (userLevel < minLevel) {
-    const reply = `Your ${baseCard.name} must be at least level ${minLevel} to upgrade (current: ${userLevel}).`;
+    const reply = `Your **${baseCard.name}** must be at least level **${minLevel}** to upgrade.`;
     if (isInteraction) await interactionOrMessage.reply({ content: reply, ephemeral: true }); else await channel.send(reply);
     return;
   }
@@ -76,7 +76,7 @@ export async function execute(interactionOrMessage, client) {
   let bal = await Balance.findOne({ userId });
   if (!bal) bal = new Balance({ userId, amount: 500 });
   if ((bal.amount || 0) < cost) {
-    const reply = `You need ${cost}¥ to upgrade to ${upgradeCard.name}. Your balance: ${bal.amount}¥.`;
+    const reply = `You need ${cost}¥ to upgrade to **${upgradeCard.name}**.`;
     if (isInteraction) await interactionOrMessage.reply({ content: reply, ephemeral: true }); else await channel.send(reply);
     return;
   }
@@ -103,6 +103,6 @@ export async function execute(interactionOrMessage, client) {
   prog.markModified('cards');
   await prog.save();
 
-  const reply = `Upgraded ${baseCard.name} → ${upgradeCard.name}! ${cost}¥ has been deducted.`;
+  const reply = `Successfully upgraded **${baseCard.name}** to **${upgradeCard.name}**!.`;
   if (isInteraction) await interactionOrMessage.reply({ content: reply }); else await channel.send(reply);
 }

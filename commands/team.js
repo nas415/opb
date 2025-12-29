@@ -2,6 +2,7 @@ import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
 import Progress from "../models/Progress.js";
 import { cards, getCardById, getRankInfo, RANKS } from "../cards.js";
 import { computeTeamBoosts, computeTeamBoostsDetailed } from "../lib/boosts.js";
+import { roundNearestFive } from "../lib/stats.js";
 
 function levenshtein(a, b) {
   const dp = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
@@ -99,18 +100,18 @@ export async function execute(interactionOrMessage, client) {
     if (prog.team.length >= 3) return sendReply("Team is full (3 cards). Remove a card first.");
     prog.team.push(card.id);
     await prog.save();
-    return sendReply(`${card.name} added to your team.`);
+    return sendReply(`**${card.name}** added to your team.`);
   }
 
   if (mode === "remove") {
     const card = findCardFuzzy(arg);
-    if (!card) return sendReply("Card not found.");
+    if (!card) return sendReply("Please state a valid card.");
     prog.team = prog.team || [];
     const idx = prog.team.indexOf(card.id);
     if (idx === -1) return sendReply(`${card.name} is not in your team.`);
     prog.team.splice(idx, 1);
     await prog.save();
-    return sendReply(`${card.name} removed from your team.`);
+    return sendReply(`**${card.name}** removed from your team.`);
   }
 
   if (mode === "autoteam") {
@@ -125,9 +126,16 @@ export async function execute(interactionOrMessage, client) {
     }
     if (!owned.length) return sendReply("You have no cards to build a team.");
     owned.sort((a,b) => b.score - a.score);
-    prog.team = owned.slice(0,3).map(x => x.card.id);
+    const newTeam = owned.slice(0,3).map(x => x.card.id);
+    // If the strongest team is already set, say so
+    const curTeam = prog.team || [];
+    const same = newTeam.length === curTeam.length && newTeam.every((v, i) => v === curTeam[i]);
+    if (same) {
+      return sendReply("Strongest possible team is already set!");
+    }
+    prog.team = newTeam;
     await prog.save();
-    return sendReply("Auto-team set to your strongest cards.");
+    return sendReply("Team automatically set to strongest cards.");
   }
 
   // view
@@ -137,8 +145,9 @@ export async function execute(interactionOrMessage, client) {
     const entry = (prog.cards instanceof Map ? prog.cards.get(id) : (prog.cards || {})[id]) || {};
     if (!card) return `#${i+1}: Unknown (${id})`;
     const level = entry.level || 0;
-    const power = Math.round((card.power || 0) * (1 + level * 0.01));
-    return `#${i+1}: **${card.name}** (${card.rank}) — Power: ${power}`;
+    const power = roundNearestFive(Math.round((card.power || 0) * (1 + level * 0.01)));
+    const health = roundNearestFive(Math.round((card.health || 0) * (1 + level * 0.01)));
+    return `#${i+1}: **${card.name}** (${card.rank}) — Power: ${power} | HP: ${health}`;
   });
 
   // compute average rank color

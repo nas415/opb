@@ -152,8 +152,8 @@ export async function execute(interactionOrMessage, client) {
       buttons.push(
         new (await import("discord.js")).ButtonBuilder()
           .setCustomId(`info_userweapon:${userId}:${card.id}`)
-          .setLabel("Your stats")
-          .setStyle((await import("discord.js")).ButtonStyle.Primary)
+          .setLabel("👤")
+          .setStyle((await import("discord.js")).ButtonStyle.Secondary)
       );
     }
     rows.push(new (await import("discord.js")).ActionRowBuilder().addComponents(...buttons));
@@ -163,8 +163,6 @@ export async function execute(interactionOrMessage, client) {
     if (isInteraction) await interactionOrMessage.reply({ embeds: [weaponEmbed], components: rows }); else await channel.send({ embeds: [weaponEmbed], components: rows });
     return;
   }
-
-  const embed = buildCardEmbed(card, ownedEntry, user);
 
   // Get equipped weapon if user owns the card
   let equippedWeapon = null;
@@ -195,6 +193,10 @@ export async function execute(interactionOrMessage, client) {
       }
     }
   }
+
+  // Always show the base (unmodified) card embed by default. The "👤" button
+  // will present the user-specific stats via `info_userstats` handler.
+  const embed = buildCardEmbed(card, ownedEntry, user);
 
   // if not owned, make it grey but keep full info visible
   if (!ownedEntry || (ownedEntry.count || 0) <= 0) {
@@ -234,8 +236,8 @@ export async function execute(interactionOrMessage, client) {
     const prevId = `info_prev:${userId}:${card.id}:${prevIndex}`;
     const nextId = `info_next:${userId}:${card.id}:${nextIndex}`;
     buttons.push(
-      new ButtonBuilder().setCustomId(prevId).setLabel("Previous").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(nextId).setLabel("Next").setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId(prevId).setLabel("Previous mastery").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(nextId).setLabel("Next mastery").setStyle(ButtonStyle.Primary)
     );
   }
   
@@ -245,8 +247,8 @@ export async function execute(interactionOrMessage, client) {
     buttons.push(
       new ButtonBuilder()
         .setCustomId(`info_userstats:${userId}:${card.id}`)
-        .setLabel("Your stats")
-        .setStyle(ButtonStyle.Primary)
+        .setLabel("👤")
+        .setStyle(ButtonStyle.Secondary)
     );
   }
   

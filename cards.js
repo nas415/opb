@@ -2345,8 +2345,8 @@ for (const c of cards) {
   if (!c || typeof c !== 'object') continue;
   if (typeof c.power === 'number') c.power = roundNearestFive(c.power);
   if (Array.isArray(c.attackRange)) {
-    c.attackRange[0] = roundNearestFive(Number(c.attackRange[0] || 0));
-    c.attackRange[1] = roundNearestFive(Number(c.attackRange[1] || 0));
+    c.attackRange[0] = Number(c.attackRange[0] || 0);
+    c.attackRange[1] = Number(c.attackRange[1] || 0);
   }
   if (typeof c.health === 'number') c.health = roundNearestFive(c.health);
   if (c.upgradeRequirements && typeof c.upgradeRequirements.minLevel === 'number') {
