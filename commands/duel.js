@@ -3,6 +3,7 @@ import Balance from "../models/Balance.js";
 import Duel from "../models/Duel.js";
 import Progress from "../models/Progress.js";
 import { getCardById } from "../cards.js";
+import { roundNearestFive, roundRangeToFive } from "../lib/stats.js";
 import { computeTeamBoosts } from "../lib/boosts.js";
 import Quest from "../models/Quest.js";
 
@@ -44,6 +45,23 @@ export async function execute(interactionOrMessage) {
 
   if (opponent.id === userId) return channel.send("You can't duel yourself!");
   if (opponent.bot) return channel.send("You can't duel bots!");
+
+  // Prevent users from being in more than one active duel at a time
+  for (const sess of DUEL_SESSIONS.values()) {
+    if (!sess) continue;
+    try {
+      if (sess.p1?.userId === userId || sess.p2?.userId === userId) {
+        const reply = "You already have an active duel in progress.";
+        if (isInteraction) return interactionOrMessage.reply({ content: reply, ephemeral: true });
+        return channel.send(reply);
+      }
+      if (sess.p1?.userId === opponent.id || sess.p2?.userId === opponent.id) {
+        const reply = `${opponent.username} is already in an active duel.`;
+        if (isInteraction) return interactionOrMessage.reply({ content: reply, ephemeral: true });
+        return channel.send(reply);
+      }
+    } catch (e) { /* ignore malformed sessions */ }
+  }
 
   // Get both users' teams and check they have them
   const [p1Progress, p2Progress] = await Promise.all([
@@ -148,7 +166,7 @@ export async function execute(interactionOrMessage) {
       }
 
       // compute team-wide boosts (hp/atk/special) for p1
-      const p1TeamBoosts = computeTeamBoosts(p1Progress.team || []);
+      const p1TeamBoosts = computeTeamBoosts(p1Progress.team || [], p1Progress.cards || null);
       const p1Cards = p1Progress.team.map(cardId => {
         const card = getCardById(cardId);
         const hasMap = p1Progress.cards && typeof p1Progress.cards.get === 'function';
@@ -201,12 +219,19 @@ export async function execute(interactionOrMessage) {
           special.range = [Math.round(special.range[0] * spMul), Math.round(special.range[1] * spMul)];
         }
 
+        // Ensure stats are rounded to nearest 5 for consistency
+        const finalPower = roundNearestFive(Math.round(power));
+        const finalAttackMin = roundNearestFive(Math.round(attackMin));
+        const finalAttackMax = roundNearestFive(Math.round(attackMax));
+        const finalHealth = roundNearestFive(Math.round(health));
+        if (special && special.range) special.range = roundRangeToFive([Math.round(special.range[0] || 0), Math.round(special.range[1] || 0)]);
+
         // Track special usage and exhaustion state for match
-        return { cardId, card, scaled: { attackRange: [attackMin, attackMax], specialAttack: special, power }, health, maxHealth: health, level, usedSpecial: false, skipNextTurnPending: false, skipThisTurn: false };
+        return { cardId, card, scaled: { attackRange: [finalAttackMin, finalAttackMax], specialAttack: special, power: finalPower }, health: finalHealth, maxHealth: finalHealth, level, usedSpecial: false, skipNextTurnPending: false, skipThisTurn: false };
       });
 
       // compute team-wide boosts (hp/atk/special) for p2
-      const p2TeamBoosts = computeTeamBoosts(p2Progress.team || []);
+      const p2TeamBoosts = computeTeamBoosts(p2Progress.team || [], p2Progress.cards || null);
       const p2Cards = p2Progress.team.map(cardId => {
         const card = getCardById(cardId);
         const hasMap = p2Progress.cards && typeof p2Progress.cards.get === 'function';
@@ -242,7 +267,14 @@ export async function execute(interactionOrMessage) {
           }
         }
 
-        return { cardId, card, scaled: { attackRange: [attackMin, attackMax], specialAttack: special, power }, health, maxHealth: health, level };
+        // Ensure stats are rounded to nearest 5 for consistency
+        const finalPower = roundNearestFive(Math.round(power));
+        const finalAttackMin = roundNearestFive(Math.round(attackMin));
+        const finalAttackMax = roundNearestFive(Math.round(attackMax));
+        const finalHealth = roundNearestFive(Math.round(health));
+        if (special && special.range) special.range = roundRangeToFive([Math.round(special.range[0] || 0), Math.round(special.range[1] || 0)]);
+
+        return { cardId, card, scaled: { attackRange: [finalAttackMin, finalAttackMax], specialAttack: special, power: finalPower }, health: finalHealth, maxHealth: finalHealth, level };
       });
 
       // Determine who goes first (highest power)
@@ -251,8 +283,8 @@ export async function execute(interactionOrMessage) {
       const firstPlayer = p1Power >= p2Power ? userId : opponent.id;
 
       DUEL_SESSIONS.set(sessionId, {
-        p1: { userId, user, cards: p1Cards, lifeIndex: 0 },
-        p2: { userId: opponent.id, user: opponent, cards: p2Cards, lifeIndex: 0 },
+        p1: { userId, user, cards: p1Cards, lifeIndex: 0, cardsMap: p1Progress.cards || null, teamBoosts: p1TeamBoosts },
+        p2: { userId: opponent.id, user: opponent, cards: p2Cards, lifeIndex: 0, cardsMap: p2Progress.cards || null, teamBoosts: p2TeamBoosts },
         currentTurn: firstPlayer,
         sessionId,
         channelId: channel.id,
@@ -339,7 +371,25 @@ async function startDuelTurn(sessionId, channel) {
     rows.push(new ActionRowBuilder().addComponents(charButtons.slice(i, i + 5)));
   }
 
-  const msg = await channel.send({ embeds: [embed], components: rows });
+  // Always send a fresh message for the turn to avoid reusing the same interactive message
+  let msg;
+  try {
+    msg = await channel.send({ embeds: [embed], components: rows });
+    try { const session = DUEL_SESSIONS.get(sessionId); if (session) session.msgId = msg.id; } catch (e) {}
+  } catch (e) {
+    // fallback: try to reuse previous message if send fails
+    try {
+      const session = DUEL_SESSIONS.get(sessionId);
+      if (session && session.msgId) {
+        msg = await channel.messages.fetch(session.msgId).catch(() => null);
+        if (msg) await msg.edit({ embeds: [embed], components: rows });
+      }
+    } catch (err) { /* ignore */ }
+    if (!msg) {
+      // As a last resort create a placeholder message
+      msg = await channel.send({ embeds: [embed], components: rows }).catch(() => null);
+    }
+  }
 
   const filter = (i) => i.user.id === attacker.userId;
   const collector = msg.createMessageComponentCollector({ filter, time: 30000 });
@@ -364,7 +414,7 @@ async function startDuelTurn(sessionId, channel) {
     if (collected.size === 0) {
       // Timeout - skip turn
       session.currentTurn = defender.userId;
-      await msg.delete().catch(() => {});
+      // do not delete the message; reuse it for next turn
       await startDuelTurn(sessionId, channel);
     }
   });
@@ -416,7 +466,6 @@ async function selectAttackType(sessionId, charIdx, msg, attacker, channel) {
     if (collected.size === 0) {
       // Timeout - skip turn
       session.currentTurn = defender.userId;
-      await msg.delete().catch(() => {});
       await startDuelTurn(sessionId, channel);
     }
   });
@@ -494,17 +543,18 @@ async function executeAttack(sessionId, charIdx, attackType, targetIdx, msg, att
       damage = randInt(range[0], range[1]);
     }
   } else {
-    // Special attack: 60% normal, 20% special, 20% miss
-    const rand = Math.random();
-    const normalRange = attackerCard.scaled ? attackerCard.scaled.attackRange : (attackerCard.card.attackRange || [0,0]);
+    // Special attack button: guaranteed special attack when clicked
     const specialRange = attackerCard.scaled && attackerCard.scaled.specialAttack ? attackerCard.scaled.specialAttack.range : (attackerCard.card.specialAttack ? attackerCard.card.specialAttack.range : null);
-    if (rand < 0.60) {
-      damage = randInt(normalRange[0], normalRange[1]);
-    } else if (rand < 0.80 && specialRange) {
+    if (specialRange) {
       isSpecial = true;
       damage = randInt(specialRange[0], specialRange[1]);
+      // mark that this card has used its special and schedule exhaustion next turn
+      attackerCard.usedSpecial = true;
+      attackerCard.skipNextTurnPending = true;
     } else {
-      isMiss = true;
+      // fallback to a normal attack if no special available
+      const normalRange = attackerCard.scaled ? attackerCard.scaled.attackRange : (attackerCard.card.attackRange || [0,0]);
+      damage = randInt(normalRange[0], normalRange[1]);
     }
   }
 
@@ -531,26 +581,89 @@ async function executeAttack(sessionId, charIdx, attackType, targetIdx, msg, att
     return '█'.repeat(filled) + '░'.repeat(len - filled);
   }
 
-  const embed = makeEmbed(
+  const hpBar = renderHP(Math.max(0, targetCard.health), targetCard.maxHealth);
+  const resultEmbed = makeEmbed(
     "Attack Result",
-    `${resultText}\n\n${targetCard.card.name} HP: ${Math.max(0, targetCard.health)}/${targetCard.maxHealth} ${renderHP(Math.max(0, targetCard.health), targetCard.maxHealth)}`
+    `${resultText}\n\n${targetCard.card.name} HP: ${Math.max(0, targetCard.health)}/${targetCard.maxHealth} ${hpBar}`
   );
 
-  // If special attack happened and there's a gif, add it for visuals
+  try {
+    // Disable buttons on the main duel message so they cannot be pressed again
+    try { await msg.edit({ components: [] }); } catch (e) {}
+    // Send a new message for the result so the UI uses a fresh embed
+    await channel.send({ embeds: [resultEmbed] }).catch(() => {});
+  } catch (e) {}
+
+  // If special attack happened and there's a gif, send a separate embed message with the gif
   if (isSpecial && attackerCard.card && attackerCard.card.specialAttack && attackerCard.card.specialAttack.gif) {
     try {
-      embed.setImage(attackerCard.card.specialAttack.gif);
+      const gifEmbed = makeEmbed(
+        `${attackerCard.card.name} used ${attackerCard.card.specialAttack.name}!`,
+        `${resultText}\n\n${targetCard.card.name} HP: ${Math.max(0, targetCard.health)}/${targetCard.maxHealth} ${hpBar}`
+      );
+      try { gifEmbed.setImage(attackerCard.card.specialAttack.gif); } catch (e) {}
+      await channel.send({ embeds: [gifEmbed] }).catch(() => {});
     } catch (e) {}
   }
-
-  try {
-    await msg.edit({ embeds: [embed], components: [] });
-  } catch (e) {}
 
   // If target was KO'd, normalize defender lifeIndex to first alive
   if (targetCard.health <= 0) {
     const idx = defender.cards.findIndex(c => c.health > 0);
     defender.lifeIndex = idx === -1 ? defender.cards.length : idx;
+    // If a Support card was killed, recompute that team's boosts and adjust scaled stats
+    try {
+      if (targetCard.card && String(targetCard.card.type).toLowerCase() === 'support') {
+        const session = DUEL_SESSIONS.get(sessionId);
+        if (session) {
+          const sideKey = (defender === session.p1) ? 'p1' : 'p2';
+          const side = session[sideKey];
+          const oldBoosts = side.teamBoosts || { atk: 0, hp: 0, special: 0 };
+          const aliveIds = side.cards.filter(c => c.health > 0).map(c => c.cardId);
+          const newBoosts = computeTeamBoosts(aliveIds, side.cardsMap || null);
+          session[sideKey].teamBoosts = newBoosts;
+
+          const oldAtk = oldBoosts.atk || 0, oldHp = oldBoosts.hp || 0, oldSp = oldBoosts.special || 0;
+          const newAtk = newBoosts.atk || 0, newHp = newBoosts.hp || 0, newSp = newBoosts.special || 0;
+          const atkRatio = (1 + newAtk/100) / (1 + oldAtk/100);
+          const hpRatio = (1 + newHp/100) / (1 + oldHp/100);
+          const spRatio = (1 + newSp/100) / (1 + oldSp/100);
+
+          const casualties = [];
+          for (const c of side.cards) {
+            // adjust attack/power
+            if (c.scaled && c.scaled.attackRange) {
+              c.scaled.attackRange[0] = Math.max(0, roundNearestFive(Math.round((c.scaled.attackRange[0] || 0) * atkRatio)));
+              c.scaled.attackRange[1] = Math.max(0, roundNearestFive(Math.round((c.scaled.attackRange[1] || 0) * atkRatio)));
+            }
+            if (c.scaled && typeof c.scaled.power === 'number') c.scaled.power = Math.max(0, roundNearestFive(Math.round(c.scaled.power * atkRatio)));
+            if (c.scaled && c.scaled.specialAttack && c.scaled.specialAttack.range) {
+              const r0 = Math.max(0, Math.round((c.scaled.specialAttack.range[0] || 0) * spRatio));
+              const r1 = Math.max(0, Math.round((c.scaled.specialAttack.range[1] || 0) * spRatio));
+              c.scaled.specialAttack.range = roundRangeToFive([r0, r1]);
+            }
+            // adjust health
+            c.maxHealth = Math.max(0, roundNearestFive(Math.round((c.maxHealth || 0) * hpRatio)));
+            c.health = Math.min(c.health, c.maxHealth);
+            if (c.health <= 0) {
+              c.health = 0;
+              casualties.push(c.card.name);
+            }
+          }
+
+          // normalize lifeIndex after casualties
+          const newIdx = side.cards.findIndex(c => c.health > 0);
+          side.lifeIndex = newIdx === -1 ? side.cards.length : newIdx;
+
+          // inform players about boost change and any casualties
+          const who = side.user ? side.user.username : sideKey;
+          const notifParts = [];
+          notifParts.push(`${who}'s support card was knocked out — team boosts recalculated.`);
+          notifParts.push(`New boosts: ATK +${newAtk}% • HP +${newHp}% • SPECIAL +${newSp}%`);
+          if (casualties.length) notifParts.push(`Casualties from boost removal: ${casualties.join(', ')}`);
+          try { await channel.send(notifParts.join('\n')); } catch (e) {}
+        }
+      }
+    } catch (e) { console.error('Error recalculating boosts after support KO:', e); }
   }
 
   // Delay and continue turn or switch to next player
@@ -572,18 +685,14 @@ async function endDuel(sessionId, winner, loser, channel) {
   const session = DUEL_SESSIONS.get(sessionId);
   if (!session) return;
 
-  // Calculate bounty based on XP difference
-  const winnerBal = await Balance.findOne({ userId: winner.userId });
-  const loserBal = await Balance.findOne({ userId: loser.userId });
+  // Calculate bounty and XP based on loser's level (level 0 => 0, level 1 => 10 XP)
+  const winnerBal = await Balance.findOne({ userId: winner.userId }) || new Balance({ userId: winner.userId, amount: 0, xp: 0, level: 0 });
+  const loserBal = await Balance.findOne({ userId: loser.userId }) || new Balance({ userId: loser.userId, amount: 0, xp: 0, level: 0 });
 
-  const bountyMin = Math.max(100, Math.floor((loserBal.xp || 0) * 0.1));
-  const bountyMax = Math.max(200, Math.floor((loserBal.xp || 0) * 0.15));
-  const bounty = randInt(bountyMin, bountyMax);
-
-  // Add XP (max 100 per day)
+  const loserLevel = Math.max(0, loserBal.level || 0);
+  // XP gained is 10 * loser level (cap by daily XP limit)
   const winDuel = await Duel.findOne({ userId: winner.userId });
   const win = dayWindow();
-
   const updatedWinDuel = winDuel || new Duel({ userId: winner.userId });
   if (updatedWinDuel.xpWindow !== win) {
     updatedWinDuel.xpWindow = win;
@@ -594,12 +703,17 @@ async function endDuel(sessionId, winner, loser, channel) {
     updatedWinDuel.duelOpponents = new Map();
   }
 
-  const xpGain = Math.min(10, 100 - (updatedWinDuel.xpToday || 0));
+  const desiredXp = loserLevel * 10;
+  const xpRemaining = Math.max(0, 100 - (updatedWinDuel.xpToday || 0));
+  const xpGain = Math.min(desiredXp, xpRemaining);
   updatedWinDuel.xpToday = (updatedWinDuel.xpToday || 0) + xpGain;
   updatedWinDuel.duelOpponents.set(loser.userId, (updatedWinDuel.duelOpponents.get(loser.userId) || 0) + 1);
   await updatedWinDuel.save();
 
-  winnerBal.amount += bounty;
+  // Bounty scaled by loser level (100 per level)
+  const bounty = loserLevel * 100;
+
+  winnerBal.amount = (winnerBal.amount || 0) + bounty;
   winnerBal.xp = (winnerBal.xp || 0) + xpGain;
   await winnerBal.save();
 

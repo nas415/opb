@@ -97,143 +97,178 @@ for (const file of eventFiles) {
 // adding express as a dependency and works with Render's $PORT environment variable.
 import http from "http";
 
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT || 3000);
 
-const server = http.createServer((req, res) => {
-  if (req.method === "GET" && (req.url === "/" || req.url === "/health" || req.url === "/_health")) {
-    res.writeHead(200, { "Content-Type": "text/plain" });
-    return res.end("OK");
-  }
-
-  if (req.method === "GET" && req.url === "/status") {
-    const payload = {
-      status: "ok",
-      port: PORT,
-      discord: client.user ? `${client.user.tag}` : null,
-      discord_logged_in: !!client.user,
-      gateway_mode: globalThis.GATEWAY_MODE || (client.user ? 'connected' : 'disconnected'),
-      discord_uptime_ms: client.uptime || null,
-      uptimeSeconds: Math.floor(process.uptime()),
-    };
-    res.writeHead(200, { "Content-Type": "application/json" });
-    return res.end(JSON.stringify(payload));
-  }
-
-  // Interactions endpoint: used when running as a web service without a gateway connection
-  if (req.method === "POST" && req.url === "/interactions") {
-    // Read raw body
-    let body = "";
-    req.on('data', (chunk) => { body += chunk.toString(); });
-    req.on('end', async () => {
-      try {
-        // signature verification requires DISCORD_PUBLIC_KEY
-        const sig = req.headers['x-signature-ed25519'];
-        const ts = req.headers['x-signature-timestamp'];
-        if (!sig || !ts || !process.env.DISCORD_PUBLIC_KEY) {
-          console.warn('Interaction received but verification could not be performed (missing headers or DISCORD_PUBLIC_KEY).');
-          res.writeHead(401);
-          return res.end('invalid request');
-        }
-
-        const verifyResult = await (async () => {
-          try {
-            const nacl = await import('tweetnacl');
-            const msg = Buffer.concat([Buffer.from(ts, 'utf8'), Buffer.from(body, 'utf8')]);
-            const sigBuf = Buffer.from(sig, 'hex');
-            const pubKey = Buffer.from(process.env.DISCORD_PUBLIC_KEY, 'hex');
-            return nacl.sign.detached.verify(msg, sigBuf, pubKey);
-          } catch (e) {
-            console.error('Error during signature verification:', e && e.message ? e.message : e);
-            return false;
-          }
-        })();
-
-        if (!verifyResult) {
-          console.warn('⚠️ Interaction signature verification failed.');
-          res.writeHead(401);
-          return res.end('invalid signature');
-        }
-
-        const payload = JSON.parse(body);
-        // PING
-        if (payload.type === 1) {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify({ type: 1 }));
-        }
-
-        // Only handle APPLICATION_COMMAND (2)
-        if (payload.type === 2 && payload.data && payload.data.name) {
-          const name = payload.data.name.toLowerCase();
-          const cmd = client.commands.get(name);
-          if (!cmd) {
-            console.warn('Received interaction for unknown command:', name);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ type: 4, data: { content: 'Command not found', flags: 64 } }));
-          }
-
-          // Build a minimal Interaction-like object compatible with our command handlers
-          const interaction = {
-            id: payload.id,
-            token: payload.token,
-            user: payload.member?.user || payload.user,
-            isCommand: () => true,
-            isChatInputCommand: () => true,
-            options: {
-              getString: (n) => {
-                const opt = (payload.data.options || []).find(o => o.name === n);
-                return opt ? opt.value : null;
-              },
-              getInteger: (n) => {
-                const opt = (payload.data.options || []).find(o => o.name === n);
-                return opt ? parseInt(opt.value, 10) : null;
-              },
-              // add other getters as needed
-            },
-            reply: async (resp) => {
-              // Convert discord.js-style reply into raw interaction response
-              const data = {};
-              if (typeof resp === 'string') data.content = resp;
-              else if (resp && resp.content) data.content = resp.content;
-              else if (resp && resp.embeds) data.embeds = resp.embeds;
-              if (resp && resp.flags) data.flags = resp.flags;
-
-              res.writeHead(200, { 'Content-Type': 'application/json' });
-              return res.end(JSON.stringify({ type: 4, data }));
-            }
-          };
-
-          try {
-            // execute command; commands may call interaction.reply which we handle above
-            await cmd.execute(interaction, client);
-            // If the command didn't call reply directly, send a default ack
-            // (some commands might already have replied) — send nothing here to avoid double response.
-          } catch (e) {
-            console.error('Error executing command for interaction:', e && e.message ? e.message : e);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ type: 4, data: { content: 'Internal error', flags: 64 } }));
-          }
-
-          return;
-        }
-
-        // Other interaction types: just acknowledge
-        res.writeHead(200);
-        res.end();
-      } catch (err) {
-        console.error('Error handling interaction:', err && err.message ? err.message : err);
-        res.writeHead(500);
-        res.end('server error');
+async function startHealthServer(startPort) {
+  const maxAttempts = 10;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const tryPort = startPort + attempt;
+    const serverInstance = http.createServer((req, res) => {
+      if (req.method === "GET" && (req.url === "/" || req.url === "/health" || req.url === "/_health")) {
+        res.writeHead(200, { "Content-Type": "text/plain" });
+        return res.end("OK");
       }
+
+      if (req.method === "GET" && req.url === "/status") {
+        const payload = {
+          status: "ok",
+          port: tryPort,
+          discord: client.user ? `${client.user.tag}` : null,
+          discord_logged_in: !!client.user,
+          gateway_mode: globalThis.GATEWAY_MODE || (client.user ? 'connected' : 'disconnected'),
+          discord_uptime_ms: client.uptime || null,
+          uptimeSeconds: Math.floor(process.uptime()),
+        };
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify(payload));
+      }
+
+      // Interactions endpoint: used when running as a web service without a gateway connection
+      if (req.method === "POST" && req.url === "/interactions") {
+        // Read raw body
+        let body = "";
+        req.on('data', (chunk) => { body += chunk.toString(); });
+        req.on('end', async () => {
+          try {
+            // signature verification requires DISCORD_PUBLIC_KEY
+            const sig = req.headers['x-signature-ed25519'];
+            const ts = req.headers['x-signature-timestamp'];
+            if (!sig || !ts || !process.env.DISCORD_PUBLIC_KEY) {
+              console.warn('Interaction received but verification could not be performed (missing headers or DISCORD_PUBLIC_KEY).');
+              res.writeHead(401);
+              return res.end('invalid request');
+            }
+
+            const verifyResult = await (async () => {
+              try {
+                const nacl = await import('tweetnacl');
+                const msg = Buffer.concat([Buffer.from(ts, 'utf8'), Buffer.from(body, 'utf8')]);
+                const sigBuf = Buffer.from(sig, 'hex');
+                const pubKey = Buffer.from(process.env.DISCORD_PUBLIC_KEY, 'hex');
+                return nacl.sign.detached.verify(msg, sigBuf, pubKey);
+              } catch (e) {
+                console.error('Error during signature verification:', e && e.message ? e.message : e);
+                return false;
+              }
+            })();
+
+            if (!verifyResult) {
+              console.warn('⚠️ Interaction signature verification failed.');
+              res.writeHead(401);
+              return res.end('invalid signature');
+            }
+
+            const payload = JSON.parse(body);
+            // PING
+            if (payload.type === 1) {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              return res.end(JSON.stringify({ type: 1 }));
+            }
+
+            // Only handle APPLICATION_COMMAND (2)
+            if (payload.type === 2 && payload.data && payload.data.name) {
+              const name = payload.data.name.toLowerCase();
+              const cmd = client.commands.get(name);
+              if (!cmd) {
+                console.warn('Received interaction for unknown command:', name);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ type: 4, data: { content: 'Command not found', flags: 64 } }));
+              }
+
+              // Build a minimal Interaction-like object compatible with our command handlers
+              const interaction = {
+                id: payload.id,
+                token: payload.token,
+                user: payload.member?.user || payload.user,
+                isCommand: () => true,
+                isChatInputCommand: () => true,
+                options: {
+                  getString: (n) => {
+                    const opt = (payload.data.options || []).find(o => o.name === n);
+                    return opt ? opt.value : null;
+                  },
+                  getInteger: (n) => {
+                    const opt = (payload.data.options || []).find(o => o.name === n);
+                    return opt ? parseInt(opt.value, 10) : null;
+                  },
+                  // add other getters as needed
+                },
+                reply: async (resp) => {
+                  // Convert discord.js-style reply into raw interaction response
+                  const data = {};
+                  if (typeof resp === 'string') data.content = resp;
+                  else if (resp && resp.content) data.content = resp.content;
+                  else if (resp && resp.embeds) data.embeds = resp.embeds;
+                  if (resp && resp.flags) data.flags = resp.flags;
+
+                  res.writeHead(200, { 'Content-Type': 'application/json' });
+                  return res.end(JSON.stringify({ type: 4, data }));
+                }
+              };
+
+              try {
+                // execute command; commands may call interaction.reply which we handle above
+                await cmd.execute(interaction, client);
+                // If the command didn't call reply directly, send a default ack
+                // (some commands might already have replied) — send nothing here to avoid double response.
+              } catch (e) {
+                console.error('Error executing command for interaction:', e && e.message ? e.message : e);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ type: 4, data: { content: 'Internal error', flags: 64 } }));
+              }
+
+              return;
+            }
+
+            // Other interaction types: just acknowledge
+            res.writeHead(200);
+            res.end();
+          } catch (err) {
+            console.error('Error handling interaction:', err && err.message ? err.message : err);
+            res.writeHead(500);
+            res.end('server error');
+          }
+        });
+
+        return;
+      }
+
+      res.writeHead(404);
+      res.end();
     });
 
-    return;
+    // attempt to listen
+    try {
+      await new Promise((resolve, reject) => {
+        serverInstance.once('error', (err) => reject(err));
+        serverInstance.listen(tryPort, () => resolve(tryPort));
+      });
+      console.log(`Health server listening on port ${tryPort}`);
+      return tryPort;
+    } catch (err) {
+      if (err && err.code === 'EADDRINUSE') {
+        console.warn(`Port ${tryPort} is in use; trying next port...`);
+        // continue loop to try next port
+        continue;
+      }
+      // unknown error - rethrow
+      throw err;
+    }
   }
+  throw new Error(`Unable to bind health server after ${maxAttempts} attempts starting at port ${startPort}`);
+}
 
-  res.writeHead(404);
-  res.end();
-});
-
-server.listen(PORT, () => console.log(`Health server listening on port ${PORT}`));
+// Start health server with fallback attempts
+(async () => {
+  try {
+    const boundPort = await startHealthServer(PORT);
+    // exposed if other parts of app want to know
+    globalThis.HEALTH_SERVER_PORT = boundPort;
+  } catch (err) {
+    console.error('Failed to start health server:', err && err.message ? err.message : err);
+    process.exit(1);
+  }
+})();
 
 // Start an optional "dummy" server on port 3000 (or override with DUMMY_PORT).
 // This is useful on hosts that expect an app to bind a fixed port even if the

@@ -2,6 +2,7 @@ import Progress from "../models/Progress.js";
 import { getCardById, getRankInfo } from "../cards.js";
 import { buildCardEmbed, buildUserCardEmbed } from "../lib/cardEmbed.js";
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from "discord.js";
+import { roundNearestFive } from "../lib/stats.js";
 
 export const name = "interactionCreate";
 export const once = false;
@@ -29,7 +30,9 @@ export async function execute(interaction, client) {
   // Diagnostics: log interactions to verify they arrive in runtime logs
   try {
     try {
-      console.log(`interactionCreate: type=${interaction.type} user=${interaction.user?.tag || interaction.user?.id} id=${interaction.id} isCommand=${interaction.isCommand ? interaction.isCommand() : false}`);
+      const isBtn = typeof interaction.isButton === 'function' ? interaction.isButton() : false;
+      const isSel = typeof interaction.isStringSelectMenu === 'function' ? interaction.isStringSelectMenu() : false;
+      console.log(`interactionCreate: type=${interaction.type} user=${interaction.user?.tag || interaction.user?.id} id=${interaction.id} isCommand=${interaction.isCommand ? interaction.isCommand() : false} isButton=${isBtn} isStringSelect=${isSel} customId=${interaction.customId || ''}`);
     } catch (e) {
       console.log('interactionCreate: unable to stringify interaction metadata', e && e.message ? e.message : e);
     }
@@ -82,9 +85,9 @@ export async function execute(interaction, client) {
           const card = it.card;
           const entry = it.entry;
           const level = entry.level || 0;
-          const power = Math.round((card.power || 0) * (1 + level * 0.01));
-          const attack = `${Math.round((card.attackRange?.[0] || 0) * (1 + level * 0.01))} - ${Math.round((card.attackRange?.[1] || 0) * (1 + level * 0.01))}`;
-          const health = Math.round((card.health || 0) * (1 + level * 0.01));
+          const power = roundNearestFive(Math.round((card.power || 0) * (1 + level * 0.01)));
+          const attack = `${roundNearestFive(Math.round((card.attackRange?.[0] || 0) * (1 + level * 0.01)))} - ${roundNearestFive(Math.round((card.attackRange?.[1] || 0) * (1 + level * 0.01)))}`;
+          const health = roundNearestFive(Math.round((card.health || 0) * (1 + level * 0.01)));
           return `**${idx + 1}. ${card.name}** (Lv ${level}) — Power: ${power} | Attack: ${attack} | HP: ${health}`;
         });
 
@@ -118,8 +121,8 @@ export async function execute(interaction, client) {
 
     if (interaction.isButton()) {
       const id = interaction.customId || "";
-      // only handle known prefixes
-      if (!id.startsWith("info_") && !id.startsWith("collection_") && !id.startsWith("quest_") && !id.startsWith("help_") && !id.startsWith("drop_claim")) return;
+      // only handle known prefixes (include shop_ and duel_ pagination)
+      if (!id.startsWith("info_") && !id.startsWith("collection_") && !id.startsWith("quest_") && !id.startsWith("help_") && !id.startsWith("drop_claim") && !id.startsWith("shop_") && !id.startsWith("duel_")) return;
 
       const parts = id.split(":");
       if (parts.length < 2) return;
@@ -185,6 +188,8 @@ export async function execute(interaction, client) {
         const groups = {
           COMBAT: [
             { name: "team", desc: "view your team" },
+            { name: "duel", desc: "challenge another user to a duel" },
+            { name: "forfeit", desc: "forfeit an active duel" },
             { name: "team add", desc: "add a card to your team" },
             { name: "team remove", desc: "remove a card from your team" },
             { name: "autoteam", desc: "builds the best possible team (powerwise)" },
@@ -201,6 +206,9 @@ export async function execute(interaction, client) {
           COLLECTION: [
             { name: "info", desc: "view info about a card or item" },
             { name: "pull", desc: "pull a random card" },
+            { name: "craft", desc: "craft items or combine materials" },
+            { name: "chest", desc: "open your chests" },
+            { name: "equip", desc: "equip a weapon or item to a card" },
             { name: "resetpulls", desc: "resets your card pull count" }
           ],
           GENERAL: [
@@ -211,24 +219,27 @@ export async function execute(interaction, client) {
           ]
         };
 
-        if (!groups[category]) {
+        const groupKey = (category || '').toString().toUpperCase();
+        if (!groups[groupKey]) {
           await interaction.reply({ content: "Category not found.", ephemeral: true });
           return;
         }
 
-        const lines = groups[category].map(c => `**${c.name}** — ${c.desc}`).join("\n") || "No commands";
+        const lines = groups[groupKey].map(c => `**${c.name}** — ${c.desc}`).join("\n") || "No commands";
+        const label = (category || '').toString();
+        const prettyLabel = label ? (label.charAt(0).toUpperCase() + label.slice(1).toLowerCase()) : 'Category';
         const embed = new EmbedBuilder()
-          .setTitle(`${category} Commands`)
+          .setTitle(`${prettyLabel} Commands`)
           .setColor(0xFFFFFF)
           .setDescription(lines)
           .setFooter({ text: `Requested by ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL() });
 
         // build buttons for all categories, mark selected as primary
-        const order = ["COMBAT", "ECONOMY", "COLLECTION", "GENERAL"];
+        const order = ["Combat", "Economy", "Collection", "General"];
         const allButtons = order.map(cat => new ButtonBuilder()
-          .setCustomId(`help_cat:${cat}:${userId}`)
-          .setLabel(cat.charAt(0) + cat.slice(1).toLowerCase())
-          .setStyle(cat === category ? ButtonStyle.Primary : ButtonStyle.Secondary)
+          .setCustomId(`help_cat:${cat.toUpperCase()}:${userId}`)
+          .setLabel(cat)
+          .setStyle(cat.toUpperCase() === groupKey ? ButtonStyle.Primary : ButtonStyle.Secondary)
         );
 
         const rows = [];
@@ -483,6 +494,26 @@ export async function execute(interaction, client) {
           await interaction.update({ embeds: [newEmbed], components: [row] });
           return;
         }
+
+      // SHOP pagination: shop_prev:<ownerId>:<idx> and shop_next:<ownerId>:<idx>
+      if (action === "shop_prev" || action === "shop_next") {
+        try {
+          const { pages, buildEmbed, buildRow } = await import("../lib/shopPages.js");
+          const rawIdx = parseInt(parts[2] || "0", 10) || 0;
+          let newIndex = rawIdx;
+          if (action === "shop_prev") newIndex = Math.max(0, rawIdx - 1);
+          if (action === "shop_next") newIndex = Math.min(pages.length - 1, rawIdx + 1);
+
+          const embed = buildEmbed(pages[newIndex]);
+          const row = buildRow(ownerId, newIndex);
+
+          await interaction.update({ embeds: [embed], components: [row] });
+        } catch (e) {
+          console.error('shop pagination handler error:', e && e.message ? e.message : e);
+          try { await interaction.reply({ content: 'Error handling shop pagination.', ephemeral: true }); } catch (er) {}
+        }
+        return;
+      }
 
       // INFO user stats: info_userstats:<userId>:<cardId>
       if (action === "info_userstats") {
@@ -795,9 +826,9 @@ export async function execute(interaction, client) {
           const card = it.card;
           const entry = it.entry;
           const level = entry.level || 0;
-          const power = Math.round((card.power || 0) * (1 + level * 0.01));
-          const attack = `${Math.round((card.attackRange?.[0] || 0) * (1 + level * 0.01))} - ${Math.round((card.attackRange?.[1] || 0) * (1 + level * 0.01))}`;
-          const health = Math.round((card.health || 0) * (1 + level * 0.01));
+          const power = roundNearestFive(Math.round((card.power || 0) * (1 + level * 0.01)));
+          const attack = `${roundNearestFive(Math.round((card.attackRange?.[0] || 0) * (1 + level * 0.01)))} - ${roundNearestFive(Math.round((card.attackRange?.[1] || 0) * (1 + level * 0.01)))}`;
+          const health = roundNearestFive(Math.round((card.health || 0) * (1 + level * 0.01)));
           return `**${newPage * PAGE_SIZE + idx + 1}. ${card.name}** (Lv ${level}) — Power: ${power} | Attack: ${attack} | HP: ${health}`;
         });
 

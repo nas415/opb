@@ -1,4 +1,5 @@
 import { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from "discord.js";
+import { roundNearestFive } from "../lib/stats.js";
 import Progress from "../models/Progress.js";
 import { getCardById, cards, getRankInfo } from "../cards.js";
 
@@ -29,9 +30,9 @@ function buildCollectionEmbed(pageItems, page, totalPages, sortLabel) {
     const card = it.card;
     const entry = it.entry;
     const level = entry.level || 0;
-    const power = Math.round((card.power || 0) * (1 + level * 0.01));
-    const attack = `${Math.round(card.attackRange[0] * (1 + level * 0.01))} - ${Math.round(card.attackRange[1] * (1 + level * 0.01))}`;
-    const health = Math.round((card.health || 0) * (1 + level * 0.01));
+    const power = roundNearestFive(Math.round((card.power || 0) * (1 + level * 0.01)));
+    const attack = `${roundNearestFive(Math.round(card.attackRange[0] * (1 + level * 0.01)))} - ${roundNearestFive(Math.round(card.attackRange[1] * (1 + level * 0.01)))}`;
+    const health = roundNearestFive(Math.round((card.health || 0) * (1 + level * 0.01)));
     return `**${idx + 1}. ${card.name}** (Lv ${level}) — Power: ${power} | Attack: ${attack} | HP: ${health}`;
   });
   embed.setDescription(lines.join("\n"));

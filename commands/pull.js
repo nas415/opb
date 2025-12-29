@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
 import { getRandomCardByProbability, getRankInfo, getCardById } from "../cards.js";
+import { generateBoostForRank } from "../lib/boosts.js";
 import Pull from "../models/Pull.js";
 import Balance from "../models/Balance.js";
 import Progress from "../models/Progress.js";
@@ -181,6 +182,14 @@ export async function execute(interactionOrMessage, client) {
     userCardsMap.set(pulled.id, existing);
   } else {
     const newEntry = { count: 1, xp: 0, level: Math.min(100, pulledLevel), acquiredAt: Date.now() };
+    // attach a randomized boost for Support cards at pull-time
+    if (pulled.type && String(pulled.type).toLowerCase() === 'support') {
+      try {
+        newEntry.boost = generateBoostForRank(pulled.rank);
+      } catch (e) {
+        newEntry.boost = { hp: 5 };
+      }
+    }
     userCardsMap.set(pulled.id, newEntry);
     // move the "added to your collection" text to the title later when building the embed
     description = ``;
@@ -241,17 +250,26 @@ export async function execute(interactionOrMessage, client) {
   const displayLevel = displayEntry.level || 0;
   // If this was a duplicate pull, do not show the duplicate's level — show XP conversion only
   let statsText;
+  function formatBoostText(boost) {
+    if (!boost) return 'None';
+    const parts = [];
+    if (boost.atk) parts.push(`ATK +${boost.atk}%`);
+    if (boost.hp) parts.push(`HP +${boost.hp}%`);
+    if (boost.special) parts.push(`SPECIAL +${boost.special}%`);
+    return parts.length ? parts.join(' • ') : 'None';
+  }
+
   if (wasDuplicate) {
     statsText = `**Power:** ${effectivePower}
 **Attack:** ${effectiveAttackMin} - ${effectiveAttackMax}
 **Health:** ${effectiveHealth}
-**Effect:** ${pulled.ability ? pulled.ability : "None"}`;
+**Effect:** ${formatBoostText(displayEntry.boost)}`;
   } else {
     statsText = `**Level:** ${displayLevel}
 **Power:** ${effectivePower}
 **Attack:** ${effectiveAttackMin} - ${effectiveAttackMax}
 **Health:** ${effectiveHealth}
-**Effect:** ${pulled.ability ? pulled.ability : "None"}`;
+**Effect:** ${formatBoostText(displayEntry.boost)}`;
   }
 
   // if this was a new acquisition, show the card's `title` as normal text in the description

@@ -159,7 +159,7 @@ export async function execute(interactionOrMessage, client) {
   }
 
   // compute and show team boosts (if any)
-  const detailed = (teamIds && teamIds.length) ? computeTeamBoostsDetailed(teamIds) : { totals: { atk:0,hp:0,special:0 }, details: [] };
+  const detailed = (teamIds && teamIds.length) ? computeTeamBoostsDetailed(teamIds, prog.cards) : { totals: { atk:0,hp:0,special:0 }, details: [] };
   const boosts = detailed.totals;
   let boostLine = '';
   if (boosts.atk) boostLine += `ATK +${boosts.atk}%`;

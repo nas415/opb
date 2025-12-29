@@ -11,6 +11,8 @@ export async function execute(interactionOrMessage, client) {
   const groups = {
     Combat: [
       { name: "team", desc: "view your team" },
+      { name: "duel", desc: "challenge another user to a duel" },
+      { name: "forfeit", desc: "forfeit an active duel" },
       { name: "team add", desc: "add a card to your team" },
       { name: "team remove", desc: "remove a card from your team" },
       { name: "autoteam", desc: "builds the best possible team (powerwise)" },
@@ -27,6 +29,9 @@ export async function execute(interactionOrMessage, client) {
     Collection: [
       { name: "info", desc: "view info about a card or item" },
       { name: "pull", desc: "pull a random card" },
+      { name: "craft", desc: "craft items or combine materials" },
+      { name: "chest", desc: "open your chests" },
+      { name: "equip", desc: "equip a weapon or item to a card" },
       { name: "resetpulls", desc: "resets your card pull count" }
     ],
     General: [
