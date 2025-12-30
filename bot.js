@@ -121,9 +121,37 @@ client.on("shardError", err => console.error("Shard error:", err));
     // Diagnostic: show token presence without revealing it
     console.log('TOKEN present:', !!process.env.TOKEN, 'length:', process.env.TOKEN ? process.env.TOKEN.length : 0);
 
+    // Quick HTTP diagnostic to verify Discord API reachability and token validity
+    try {
+      const ac = new AbortController();
+      const t = setTimeout(() => ac.abort(), 10000);
+      const res = await fetch('https://discord.com/api/v10/gateway/bot', {
+        method: 'GET',
+        headers: { Authorization: `Bot ${process.env.TOKEN}` },
+        signal: ac.signal
+      });
+      clearTimeout(t);
+      console.log('Gateway HTTP check status:', res.status);
+      try {
+        const body = await res.text();
+        console.log('Gateway HTTP response:', body && body.length > 1000 ? body.slice(0, 1000) + '...truncated' : body);
+      } catch (e) {
+        console.log('Unable to read gateway HTTP body:', e && e.message ? e.message : e);
+      }
+    } catch (e) {
+      console.error('Gateway HTTP check failed:', e && e.message ? e.message : e);
+    }
+
     // Add a timeout so we can detect if login hangs without resolving or rejecting.
     const loginPromise = client.login(process.env.TOKEN);
+    loginPromise.then(() => console.log('client.login() resolved')).catch(err => console.error('client.login() eventual rejection:', err && err.message ? err.message : err));
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('client.login() timed out after 30s')), 30000));
+
+    // attach websocket/shard diagnostics
+    client.on('shardDisconnect', (event) => console.warn('shardDisconnect:', event));
+    client.on('shardError', (err) => console.error('shardError event:', err));
+    client.on('shardReconnecting', () => console.log('shardReconnecting'));
+    client.on('shardReady', (id) => console.log('shardReady:', id));
 
     await Promise.race([loginPromise, timeout]);
     console.log(`✅ Logged in as ${client.user.tag}`);
