@@ -23,59 +23,80 @@ This caused:
 - Extra Discord API calls
 - Rate limit stress during restarts
 
-**Solution:** Completely removed:
-- `checkDiscordReachable()` (DNS lookup - unnecessary)
-- `checkTokenRestWithRetries()` (REST token validation - causes rate limits)
-- `loginWithRetries()` (redundant with gateway loop)
+**Solution:** Completely removed all REST validation code
 
-**If you need token validation disabled officially:**
-Set in your Render environment variables:
+## Issue 3: CRITICAL - Gateway Lifecycle Sabotage ✅ FIXED
+**The Smoking Gun - Code Was Fighting Itself**
+
+**Problem:** The bot was fighting discord.js's internal gateway management:
+- ❌ Custom WS connectivity test (unnecessary)
+- ❌ Manual gateway retry loop (interferes with discord.js)
+- ❌ `Promise.race()` wrapping `client.login()` with 60s timeout
+- ❌ Infinite retry loops on identify
+
+**Why This Was Causing Timeouts:**
+```javascript
+// ❌ WRONG - This breaks discord.js
+await Promise.race([
+  client.login(process.env.TOKEN),
+  new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('Discord login timed out')), 60000)
+  ),
+]);
 ```
-DISABLE_REST_CHECK=true
+
+`client.login()` doesn't resolve when the socket opens - it resolves when Discord finishes identifying + sends READY event. Racing against a 60s timeout causes:
+1. Timeout fires before READY arrives
+2. Promise rejects, aborting the login
+3. Code retries identify (hitting Discord's gateway cooldown)
+4. Infinite timeout loop
+
+**Solution - Single Clean Login:**
+```javascript
+// ✅ CORRECT
+client.once('ready', () => {
+  console.log(`✅ Logged in as ${client.user.tag}`);
+});
+
+await client.login(process.env.TOKEN);
 ```
-(This setting was already in your code but now is truly unused)
 
-## Issue 3: Multiple login() Calls ✅ FIXED
-**Problem:** `client.login()` was being called in multiple places:
-1. `loginWithRetries()` function
-2. Inside the `gatewayLoop()` function
+Now:
+- discord.js owns the gateway lifecycle
+- No custom timeouts interfering
+- No race conditions
+- If login fails, process exits → Render auto-restarts
+- READY resolves naturally when Discord is ready
 
-This creates identify/session limit risks with Discord.
-
-**Solution:** Consolidated to a SINGLE `client.login()` call location:
-- Only in the main `gatewayLoop()`
-- Clean exponential backoff: 5s → 10s → 20s → 40s → 80s → max 1 hour
-- No retry-after complexity - simple and reliable
-
-## Summary of Changes
+## Summary of All Changes
 
 | Area | Before | After |
 |------|--------|-------|
 | HTTP Servers | 2 (health + dummy) | 1 (health only) |
 | REST Calls | checkDiscordReachable + checkTokenRestWithRetries | None |
-| login() Calls | 2+ places | 1 place (gatewayLoop) |
-| Startup Complexity | High (many async functions) | Low (direct gateway loop) |
-| Rate Limit Risk | HIGH | None |
+| WS Tests | Custom WS connectivity test | None |
+| Login Pattern | Promise.race with timeout | Single clean await |
+| Retry Loops | Manual exponential backoff loop | None (Render handles it) |
+| Gateway Owner | Custom code fighting discord.js | discord.js (correct) |
+| Identify Risk | HIGH (multiple calls) | None (single identify) |
 
-## Testing Recommendations
+## Expected Behavior
 
-1. **Verify health endpoint** works:
-   ```bash
-   curl http://localhost:3000/health
-   # Should return: OK
-   ```
+**On startup:**
+```
+✅ Message Content intent is included...
+✅ Logging in to Discord...
+✅ Logged in as YourBot#0000
+Ready to accept commands!
+```
 
-2. **Verify status endpoint** works:
-   ```bash
-   curl http://localhost:3000/status
-   # Should return JSON with bot info
-   ```
+**On failure:**
+- Process exits immediately
+- Render auto-restarts the service
+- No manual retry logic interfering
 
-3. **Check logs** on startup - should see:
-   - ✅ No REST validation attempts
-   - ✅ Direct "Gateway attempt 1" messages
-   - ✅ Clean login attempts with exponential backoff
-
-4. **Monitor rate limits** - should be zero:
-   - No 429 errors from your startup code
-   - Only genuine Discord API throttling (if any)
+**No more:**
+- ⚠️ Token REST check returned 429
+- Timeout loops
+- Duplicate identify attempts
+- Gateway race conditions

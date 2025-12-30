@@ -288,72 +288,28 @@ if (!process.env.TOKEN) {
 } else {
   console.log(`Found TOKEN of length ${process.env.TOKEN.length} characters — performing pre-login checks...`);
 
-  // Helper for sleep
-  const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
-
   // Add event diagnostics for connection issues
   client.on('error', (err) => console.error('client error:', err));
   client.on('shardError', (err) => console.error('shard error:', err));
   client.on('shardDisconnect', (event, shardId) => console.warn('shard disconnect:', { event, shardId }));
 
-  // WebSocket connectivity test
-  const testWebsocketOnce = async () => {
-    try {
-      const { WebSocket } = await import('ws');
-      return await new Promise((resolve) => {
-        let settled = false;
-        const ws = new WebSocket('wss://gateway.discord.gg/?v=10&encoding=json');
-        const cleanup = () => { try { ws.terminate(); } catch (e) {} };
-        const finish = (ok, msg) => { if (settled) return; settled = true; cleanup(); resolve({ ok, msg }); };
-        ws.on('open', () => finish(true, 'WS open'));
-        ws.on('message', (m) => {/* ignore messages */});
-        ws.on('error', (e) => finish(false, e && e.message ? e.message : String(e)));
-        ws.on('close', (code, reason) => finish(false, `WS closed: ${code} ${reason ? reason.toString().slice(0,100) : ''}`));
-        setTimeout(() => finish(false, 'WS test timeout'), 10000);
-      });
-    } catch (e) {
-      console.error('WS test import error:', e && e.message ? e.message : e);
-      return { ok: false, msg: e && e.message ? e.message : e };
-    }
-  };
+  // Listen for ready event — discord.js will emit this when fully connected and identified
+  client.once('ready', () => {
+    console.log(`✅ Logged in as ${client.user.tag}`);
+    globalThis.GATEWAY_MODE = 'connected';
+  });
 
-  // Main gateway login loop with exponential backoff
-  const maxBackoff = 60 * 60 * 1000; // 1 hour
-  const base = 5000;
-  let attempt = 0;
+  // Handle reconnects
+  client.on('shardResume', (replayed, shardId) => {
+    console.log(`✅ Shard ${shardId} resumed, replayed ${replayed} events`);
+  });
 
   if (process.env.DISABLE_GATEWAY === 'true' || process.env.INTERACTIONS_ONLY === 'true') {
     console.log('DISABLE_GATEWAY/INTERACTIONS_ONLY is set — skipping Discord gateway login and running in interactions-only mode.');
     globalThis.GATEWAY_MODE = 'disabled';
   } else {
-    (async function gatewayLoop() {
-      while (true) {
-        attempt++;
-        try {
-          console.log(`Gateway attempt ${attempt}: performing WS connectivity check...`);
-          const wsRes = await testWebsocketOnce();
-          if (!wsRes.ok) console.warn('WS connectivity test failed:', wsRes.msg);
-          else console.log('WS connectivity test success');
-
-          globalThis.GATEWAY_MODE = 'connecting';
-          console.log(`Attempting gateway login (attempt ${attempt})...`);
-          await Promise.race([
-            client.login(process.env.TOKEN),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Discord login timed out')), 60000)),
-          ]);
-          console.log('✅ Discord login initiated — waiting for ready event...');
-          return; // success
-        } catch (err) {
-          console.error(`Gateway login attempt ${attempt} failed:`, err && err.message ? err.message : err);
-          globalThis.GATEWAY_MODE = 'failed';
-          // determine wait time
-          let wait = Math.ceil(base * Math.pow(2, Math.min(attempt - 1, 6)));
-          if (wait > maxBackoff) wait = maxBackoff;
-          console.log(`Waiting ${wait}ms before next gateway attempt...`);
-          await sleep(wait);
-          continue;
-        }
-      }
-    })();
+    // Single, clean login. Let discord.js manage the gateway lifecycle.
+    // If it fails, the process crashes and Render restarts it.
+    await client.login(process.env.TOKEN);
   }
 }
