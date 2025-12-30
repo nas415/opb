@@ -92,9 +92,8 @@ for (const file of eventFiles) {
   }
 }
 
-// Start a small HTTP server FIRST so Render and uptime monitors (e.g., UptimeRobot)
-// can check that the service is alive even if Discord login hangs. This avoids
-// adding express as a dependency and works with Render's $PORT environment variable.
+// Start a single HTTP server for health checks and interaction endpoints
+// Render and uptime monitors can check /health even if Discord login hangs
 import http from "http";
 
 const PORT = Number(process.env.PORT || 3000);
@@ -258,41 +257,16 @@ async function startHealthServer(startPort) {
   throw new Error(`Unable to bind health server after ${maxAttempts} attempts starting at port ${startPort}`);
 }
 
-// Start health server with fallback attempts
+// Start the single HTTP server
 (async () => {
   try {
     const boundPort = await startHealthServer(PORT);
-    // exposed if other parts of app want to know
     globalThis.HEALTH_SERVER_PORT = boundPort;
   } catch (err) {
     console.error('Failed to start health server:', err && err.message ? err.message : err);
     process.exit(1);
   }
 })();
-
-// Start an optional "dummy" server on port 3000 (or override with DUMMY_PORT).
-// This is useful on hosts that expect an app to bind a fixed port even if the
-// main service uses the platform-assigned $PORT. The dummy server tolerates
-// port-in-use errors so it won't crash the process.
-const DUMMY_PORT = Number(process.env.DUMMY_PORT || 3000);
-const dummyServer = http.createServer((req, res) => {
-  if (req.method === 'GET' && (req.url === '/' || req.url === '/dummy' || req.url === '/health')) {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    return res.end('OK - dummy');
-  }
-  res.writeHead(404);
-  res.end();
-});
-
-dummyServer.on('error', (err) => {
-  if (err && err.code === 'EADDRINUSE') {
-    console.warn(`Dummy server port ${DUMMY_PORT} is already in use; skipping dummy server.`);
-  } else {
-    console.error('Dummy server error:', err);
-  }
-});
-
-dummyServer.listen(DUMMY_PORT, () => console.log(`Dummy server listening on port ${DUMMY_PORT}`));
 
 // Optional: auto-register slash commands if explicitly enabled
 if (process.env.REGISTER_COMMANDS_ON_START === 'true') {
@@ -314,163 +288,45 @@ if (!process.env.TOKEN) {
 } else {
   console.log(`Found TOKEN of length ${process.env.TOKEN.length} characters — performing pre-login checks...`);
 
-  // Diagnostic helpers: check DNS and the Discord REST API for token validity.
-  const { lookup } = await import('dns/promises');
-
-  const checkDiscordReachable = async () => {
-    try {
-      const addresses = await lookup('discord.com');
-      console.log('✅ DNS lookup for discord.com succeeded:', addresses);
-      return { ok: true };
-    } catch (err) {
-      console.error('❌ DNS lookup for discord.com failed:', err && err.message ? err.message : err);
-      return { ok: false, error: err };
-    }
-  };
-
-  // helper sleep
+  // Helper for sleep
   const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
-  // If you want to skip REST checks that may rate limit you, set DISABLE_REST_CHECK=true in env
-  const DISABLE_REST_CHECK = process.env.DISABLE_REST_CHECK === 'true';
-  if (DISABLE_REST_CHECK) console.log('DISABLE_REST_CHECK=true — skipping REST token validation to avoid rate limits');
+  // Add event diagnostics for connection issues
+  client.on('error', (err) => console.error('client error:', err));
+  client.on('shardError', (err) => console.error('shard error:', err));
+  client.on('shardDisconnect', (event, shardId) => console.warn('shard disconnect:', { event, shardId }));
 
-  const checkTokenRestWithRetries = async (token, maxAttempts = 3) => {
-    if (DISABLE_REST_CHECK) return { ok: true, skipped: true };
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const resp = await fetch('https://discord.com/api/v10/users/@me', {
-          headers: { Authorization: `Bot ${token}` },
-          method: 'GET',
-        });
-
-        if (resp.status === 200) {
-          const body = await resp.json();
-          console.log('✅ Token REST check succeeded, bot:', body.username ? `${body.username}#${body.discriminator || '????'}` : body);
-          return { ok: true, body };
-        }
-
-        if (resp.status === 401) {
-          console.error('❌ Token REST check failed: 401 Unauthorized — invalid token');
-          return { ok: false, error: 'invalid_token', status: 401 };
-        }
-
-        if (resp.status === 429) {
-          // Rate limited; try to read retry_after but DON'T block startup by waiting multiple retries here.
-          let retryAfterMs = 0;
-          try {
-            const json = await resp.json();
-            const retryAfter = json && (json.retry_after || json.retry_after_ms || json.retryAfter);
-            if (typeof retryAfter === 'number') retryAfterMs = Math.ceil(retryAfter * 1000);
-          } catch (e) {
-            // ignore
-          }
-          const headerRetry = resp.headers.get('retry-after');
-          if (headerRetry && !retryAfterMs) {
-            const h = Number(headerRetry);
-            if (!Number.isNaN(h)) retryAfterMs = Math.ceil(h * 1000);
-          }
-          console.warn(`⚠️ Token REST check returned 429 (rate limited). Not retrying further here to avoid startup delay. Retry-After: ${retryAfterMs}ms`);
-          return { ok: false, status: 429, error: 'rate_limited', retryAfterMs };
-        }
-
-        console.error('❌ Token REST check returned status', resp.status);
-        return { ok: false, status: resp.status };
-      } catch (err) {
-        console.error('❌ Token REST check threw an error (attempt ' + attempt + '):', err && err.message ? err.message : err);
-        if (attempt < maxAttempts) {
-          const backoff = Math.ceil(2000 * Math.pow(2, attempt - 1));
-          await sleep(backoff);
-          continue;
-        }
-        return { ok: false, error: err };
-      }
-    }
-    return { ok: false, error: 'rate_limited' };
-  };
-
-  const loginWithRetries = async (token, attempts = 3) => {
-    for (let i = 1; i <= attempts; i++) {
-      try {
-        console.log(`Websocket login attempt ${i}/${attempts}`);
-        await Promise.race([
-          client.login(token),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Discord login timed out')), 60000)),
-        ]);
-        return { ok: true };
-      } catch (err) {
-        console.error(`Login attempt ${i} failed:`, err && err.message ? err.message : err);
-        if (i < attempts) {
-          const wait = Math.ceil(5000 * Math.pow(2, i - 1));
-          console.log(`Waiting ${wait}ms before retrying login...`);
-          await sleep(wait);
-          continue;
-        }
-        return { ok: false, error: err };
-      }
+  // WebSocket connectivity test
+  const testWebsocketOnce = async () => {
+    try {
+      const { WebSocket } = await import('ws');
+      return await new Promise((resolve) => {
+        let settled = false;
+        const ws = new WebSocket('wss://gateway.discord.gg/?v=10&encoding=json');
+        const cleanup = () => { try { ws.terminate(); } catch (e) {} };
+        const finish = (ok, msg) => { if (settled) return; settled = true; cleanup(); resolve({ ok, msg }); };
+        ws.on('open', () => finish(true, 'WS open'));
+        ws.on('message', (m) => {/* ignore messages */});
+        ws.on('error', (e) => finish(false, e && e.message ? e.message : String(e)));
+        ws.on('close', (code, reason) => finish(false, `WS closed: ${code} ${reason ? reason.toString().slice(0,100) : ''}`));
+        setTimeout(() => finish(false, 'WS test timeout'), 10000);
+      });
+    } catch (e) {
+      console.error('WS test import error:', e && e.message ? e.message : e);
+      return { ok: false, msg: e && e.message ? e.message : e };
     }
   };
 
-  (async () => {
-    const dnsRes = await checkDiscordReachable();
-    const tokenRes = await checkTokenRestWithRetries(process.env.TOKEN, 3);
+  // Main gateway login loop with exponential backoff
+  const maxBackoff = 60 * 60 * 1000; // 1 hour
+  const base = 5000;
+  let attempt = 0;
 
-    if (!dnsRes.ok) {
-      console.error('Network/DNS check failed — outbound network to discord.com may be blocked from this environment.');
-    }
-
-    if (!tokenRes.ok) {
-      if (tokenRes.error === 'invalid_token' || tokenRes.status === 401) {
-        console.error('❌ The provided TOKEN is invalid. Rotate the bot token and update Render environment variables.');
-        process.exit(1);
-      }
-      if (tokenRes.error === 'rate_limited' || tokenRes.status === 429) {
-        console.warn('⚠️ Token REST check is being rate limited. Proceeding to websocket login attempts immediately to avoid startup delay. Consider setting DISABLE_REST_CHECK=true to skip REST checks on startup.');
-      } else {
-        console.error('Token REST check failed:', tokenRes);
-      }
-    }
-
-    // Add more event diagnostics for connection issues
-    client.on('error', (err) => console.error('client error:', err));
-    client.on('shardError', (err) => console.error('shard error:', err));
-    client.on('shardDisconnect', (event, shardId) => console.warn('shard disconnect:', { event, shardId }));
-
-    // WebSocket connectivity test
-    const testWebsocketOnce = async () => {
-      try {
-        const { WebSocket } = await import('ws');
-        return await new Promise((resolve) => {
-          let settled = false;
-          const ws = new WebSocket('wss://gateway.discord.gg/?v=10&encoding=json');
-          const cleanup = () => { try { ws.terminate(); } catch (e) {} };
-          const finish = (ok, msg) => { if (settled) return; settled = true; cleanup(); resolve({ ok, msg }); };
-          ws.on('open', () => finish(true, 'WS open'));
-          ws.on('message', (m) => {/* ignore messages */});
-          ws.on('error', (e) => finish(false, e && e.message ? e.message : String(e)));
-          ws.on('close', (code, reason) => finish(false, `WS closed: ${code} ${reason ? reason.toString().slice(0,100) : ''}`));
-          setTimeout(() => finish(false, 'WS test timeout'), 10000);
-        });
-      } catch (e) {
-        console.error('WS test import error:', e && e.message ? e.message : e);
-        return { ok: false, msg: e && e.message ? e.message : e };
-      }
-    };
-
-    // background login loop with exponential backoff and respect for Retry-After when available
-    const maxBackoff = 60 * 60 * 1000; // 1 hour
-    const base = 5000;
-    let attempt = 0;
-    let lastRetryAfter = tokenRes && tokenRes.retryAfterMs ? tokenRes.retryAfterMs : 0;
-
-    if (process.env.DISABLE_GATEWAY === 'true' || process.env.INTERACTIONS_ONLY === 'true') {
-      console.log('DISABLE_GATEWAY/INTERACTIONS_ONLY is set — skipping Discord gateway login and running in interactions-only mode.');
-      globalThis.GATEWAY_MODE = 'disabled';
-      return;
-    }
-
-    (async function gatewayLoop(){
+  if (process.env.DISABLE_GATEWAY === 'true' || process.env.INTERACTIONS_ONLY === 'true') {
+    console.log('DISABLE_GATEWAY/INTERACTIONS_ONLY is set — skipping Discord gateway login and running in interactions-only mode.');
+    globalThis.GATEWAY_MODE = 'disabled';
+  } else {
+    (async function gatewayLoop() {
       while (true) {
         attempt++;
         try {
@@ -492,18 +348,12 @@ if (!process.env.TOKEN) {
           globalThis.GATEWAY_MODE = 'failed';
           // determine wait time
           let wait = Math.ceil(base * Math.pow(2, Math.min(attempt - 1, 6)));
-          if (lastRetryAfter && lastRetryAfter > wait) wait = lastRetryAfter;
           if (wait > maxBackoff) wait = maxBackoff;
           console.log(`Waiting ${wait}ms before next gateway attempt...`);
           await sleep(wait);
-          // Refresh token REST info to catch updated Retry-After if any
-          try {
-            const fresh = await checkTokenRestWithRetries(process.env.TOKEN, 1);
-            if (fresh && fresh.retryAfterMs) lastRetryAfter = fresh.retryAfterMs;
-          } catch (e) {}
           continue;
         }
       }
     })();
-  })();
+  }
 }
