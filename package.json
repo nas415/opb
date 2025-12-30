@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "npx concurrently \"node server.js\" \"node bot.js\"",
+    "start": "node bot.js",
     "deploy": "node deploy-commands.js"
   },
   "keywords": [],
