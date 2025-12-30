@@ -18,7 +18,20 @@ const intents = [
   GatewayIntentBits.MessageContent,
 ];
 
-const client = new Client({ intents });
+// If a proxy URL is provided (e.g. socks5://user:pass@host:port), route the WebSocket via that proxy.
+let clientOptions = { intents };
+if (process.env.PROXY_URL) {
+  try {
+    const { SocksProxyAgent } = await import('socks-proxy-agent');
+    const agent = new SocksProxyAgent(process.env.PROXY_URL);
+    clientOptions.ws = { agent };
+    console.log('Using proxy for gateway connections:', process.env.PROXY_URL.split('@').pop());
+  } catch (e) {
+    console.error('Failed to configure proxy agent (is socks-proxy-agent installed?):', e && e.message ? e.message : e);
+  }
+}
+
+const client = new Client(clientOptions);
 
 client.commands = new Collection();
 
