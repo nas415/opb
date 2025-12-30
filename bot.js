@@ -142,19 +142,38 @@ client.on("shardError", err => console.error("Shard error:", err));
       console.error('Gateway HTTP check failed:', e && e.message ? e.message : e);
     }
 
-    // Add a timeout so we can detect if login hangs without resolving or rejecting.
-    const loginPromise = client.login(process.env.TOKEN);
-    loginPromise.then(() => console.log('client.login() resolved')).catch(err => console.error('client.login() eventual rejection:', err && err.message ? err.message : err));
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('client.login() timed out after 30s')), 30000));
-
     // attach websocket/shard diagnostics
     client.on('shardDisconnect', (event) => console.warn('shardDisconnect:', event));
     client.on('shardError', (err) => console.error('shardError event:', err));
     client.on('shardReconnecting', () => console.log('shardReconnecting'));
     client.on('shardReady', (id) => console.log('shardReady:', id));
 
-    await Promise.race([loginPromise, timeout]);
-    console.log(`✅ Logged in as ${client.user.tag}`);
+    // Retry loop with exponential backoff for transient failures (e.g., 429 / network blips)
+    const maxAttempts = 5;
+    let lastErr = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        console.log(`client.login() attempt ${attempt}/${maxAttempts}`);
+        const loginPromise = client.login(process.env.TOKEN);
+        loginPromise.then(() => console.log('client.login() resolved')).catch(err => console.error('client.login() eventual rejection:', err && err.message ? err.message : err));
+
+        const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('client.login() timed out after 30s')), 30000));
+        await Promise.race([loginPromise, timeout]);
+        console.log(`✅ Logged in as ${client.user.tag}`);
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+        console.error(`client.login() attempt ${attempt} failed:`, err && err.message ? err.message : err);
+        if (attempt < maxAttempts) {
+          const delaySec = Math.pow(2, attempt); // exponential backoff: 2,4,8,...
+          console.log(`Waiting ${delaySec}s before retrying...`);
+          await new Promise(r => setTimeout(r, delaySec * 1000));
+        }
+      }
+    }
+
+    if (lastErr) throw lastErr;
   } catch (err) {
     console.error('❌ client.login() failed:', err);
     // Optionally exit with non-zero to surface failure to process managers
