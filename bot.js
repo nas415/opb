@@ -118,7 +118,14 @@ client.on("shardError", err => console.error("Shard error:", err));
 (async () => {
   try {
     console.log("🚀 Calling client.login() now…");
-    await client.login(process.env.TOKEN);
+    // Diagnostic: show token presence without revealing it
+    console.log('TOKEN present:', !!process.env.TOKEN, 'length:', process.env.TOKEN ? process.env.TOKEN.length : 0);
+
+    // Add a timeout so we can detect if login hangs without resolving or rejecting.
+    const loginPromise = client.login(process.env.TOKEN);
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('client.login() timed out after 30s')), 30000));
+
+    await Promise.race([loginPromise, timeout]);
     console.log(`✅ Logged in as ${client.user.tag}`);
   } catch (err) {
     console.error('❌ client.login() failed:', err);
